@@ -24,45 +24,34 @@ from multiprocessing import Process
 import logging
 import logging.handlers
 import Queue
-from ConfigParser import SafeConfigParser
-from sys import platform
-
 import serial  # Requires "pyserial"
 from lib.fona import Fona
 from lib.relay import PowerRelay
 import RPi.GPIO as GPIO
+import PiWarmerConfiguration
 
-# read in configuration settings
 
-IS_LOCAL_DEBUG = platform == "win32"
-
-PARSER = SafeConfigParser()
-CONFIG_FILE_LOCATION = '/home/pi/Desktop/piWarmer.config'
-if IS_LOCAL_DEBUG:
-    CONFIG_FILE_LOCATION = './piWarmer.config'
-PARSER.read(CONFIG_FILE_LOCATION)
-SERIAL_PORT = PARSER.get('SETTINGS', 'SERIAL_PORT')
-BAUDRATE = PARSER.get('SETTINGS', 'BAUDRATE')
-HEATER_GPIO_PIN = PARSER.getint('SETTINGS', 'HEATER_GPIO_PIN')
-MQ2 = PARSER.getboolean('SETTINGS', 'MQ2')
-MQ2_GPIO_PIN = PARSER.getint('SETTINGS', 'MQ2_GPIO_PIN')
-ALLOWED_NUMBERS = PARSER.get('SETTINGS', 'ALLOWED_PHONE_NUMBERS')
-ALLOWED_NUMBERS = ALLOWED_NUMBERS.split(',')
-MAX_TIME = PARSER.getint('SETTINGS', 'MAX_HEATER_TIME')
-MAX_TIME = MAX_TIME * 60  # convert from minutes to seconds for sleep
-LOG_FILENAME = PARSER.get('SETTINGS', 'LOGFILE')
-
-if IS_LOCAL_DEBUG:
-    LOG_FILENAME = PARSER.get('SETTINGS', 'DEBUGGING_LOGFILE')
+CONFIGURATION = PiWarmerConfiguration.PiWarmerConfiguration()
 
 LOG_LEVEL = logging.INFO
 
 last_number = False
+logger = logging.getLogger("heater")
+logger.setLevel(LOG_LEVEL)
 
+def log_info_message(message_to_log):
+    """ Log and print at Info level """
+    print message_to_log
+    logger.info(message_to_log)
+
+def log_warning_message(message_to_log):
+    """ Log and print at Warning level """
+    print message_to_log
+    logger.warning(message_to_log)
 
 def get_mq2_status():
     """ Returns the state of the gas detector """
-    input_state = GPIO.input(MQ2_GPIO_PIN)
+    input_state = GPIO.input(CONFIGURATION.mq2_gpio_pin)
     if input_state == 1:
         return "off"
     if input_state == 0:
@@ -75,10 +64,10 @@ def get_cleaned_phone_number(phone_number_to_clean):
 
     return False
 
-def process_message(message, phone_number=False):
+def process_message(fona, message, heater_relay, heater_queue, phone_number=False):
     """ Process a SMS message/command. """
 
-    status = heater.get_status()
+    status = heater_relay.get_status()
     message = message.lower()
     turn_on = True
     print message
@@ -87,7 +76,7 @@ def process_message(message, phone_number=False):
     phone_number = get_cleaned_phone_number(phone_number)
 
     # check to see if this is an allowed phone number
-    if phone_number and (phone_number not in ALLOWED_NUMBERS):
+    if phone_number and (phone_number not in CONFIGURATION.allowed_phone_numbers):
         logger.warning("Received unauthorized SMS from " + phone_number)
         return "Received unauthorized SMS from " + phone_number
 
@@ -97,16 +86,16 @@ def process_message(message, phone_number=False):
         if status == "1":
             message_response = "Heater is already ON"
             turn_on = False
-        if MQ2:
+        if CONFIGURATION.is_mq2_enabled:
             if get_mq2_status() == "on":
                 message_response = "Gas warning. Not turning heater on"
                 turn_on = False
         if turn_on:
             try:
-                heater.switch_high()
+                heater_relay.switch_high()
                 message_response = "Heater turned ON"
                 print "Heater turned ON"
-                queue.put("On")
+                heater_queue.put("On")
                 if phone_number:
                     last_number = '"+' + phone_number + '"'
             except:
@@ -118,9 +107,9 @@ def process_message(message, phone_number=False):
         logger.info("Received OFF request from " + phone_number)
         if status == "1":
             try:
-                heater.switch_low()
+                heater_relay.switch_low()
                 message_response = "Heater turned OFF"
-                queue.put("Off")
+                heater_queue.put("Off")
             except:
                 print "Issues turning heater OFF"
                 logger.warning("Issues turning heater OFF")
@@ -164,7 +153,7 @@ def process_message(message, phone_number=False):
 
 def shutdown():
     """ Shuts down the Pi """
-    p = subprocess.Popen(["sudo shutdown -P now " + str(HEATER_GPIO_PIN)],
+    p = subprocess.Popen(["sudo shutdown -P now " + str(CONFIGURATION.heater_gpio_pin)],
                          shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 # for safety, this thread starts a timer for when the heater was turned on
@@ -173,17 +162,17 @@ def start_heater_shutoff_timer(heater_queue):
     """ Starts a timer to turn off the heater. """
     print "Starting timer"
     logger.info("Starting Heater Timer. Max Time is " +
-                str(MAX_TIME / 60) + " minutes")
-    time.sleep(MAX_TIME)
+                str(CONFIGURATION.max_minutes_to_run) + " minutes")
+    time.sleep(CONFIGURATION.max_minutes_to_run * 60)
     heater_queue.put("max_time")
     return
 
 
-def monitor_LED_sensor(myLEDq, queue, client=False):
+def monitor_LED_sensor(myLEDq, queue, heater_relay, client=False):
     while True:
         led_status = get_mq2_status()
         # print LED_status
-        if led_status == "on" and heater.get_status() == "1":
+        if led_status == "on" and heater_relay.get_status() == "1":
 
             # clear the queue if it has a bunch of no warnings in it
             while not myLEDq.empty():
@@ -191,7 +180,7 @@ def monitor_LED_sensor(myLEDq, queue, client=False):
             myLEDq.put("gas_warning")
             queue.put("Off")
 
-            heater.switch_low()
+            heater_relay.switch_low()
             time.sleep(60)
         else:
             myLEDq.put("no_warning")
@@ -199,8 +188,6 @@ def monitor_LED_sensor(myLEDq, queue, client=False):
 
 
 def initialize_modem(
-        serial_port,
-        baudrate,
         timeout=.1,
         rtscts=0,
         retries=4,
@@ -212,7 +199,7 @@ def initialize_modem(
     while retries > 0 and serial_connection != None:
         try:
             serial_connection = serial.Serial(
-                serial_port, baudrate, timeout, rtscts)
+                CONFIGURATION.cell_serial_port, CONFIGURATION.cell_baud_rate, timeout, rtscts)
         except:
             logger.warning(
                 "SERIAL DEVICE NOT LOCATED. Try changing /dev/ttyUSB0 to different USB port (like /dev/ttyUSB1) in configuration file or check to make sure device is connected correctly")
@@ -227,18 +214,18 @@ def initialize_modem(
 
     return serial_connection
 
-def initialize_gas_sensor(is_mq2_enabled, mq2_io_pin):
+def initialize_gas_sensor(heater_relay, heater_queue):
     """ Initializes and enables the MQ2 Gas Sensor """
-    if is_mq2_enabled:
+    if CONFIGURATION.is_mq2_enabled:
         print "MQ2 Sensor enabled"
         logger.info("MQ2 Gas Sensor enabled")
         # setup MQ2 GPIO PINS
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(mq2_io_pin, GPIO.IN)
+        GPIO.setup(CONFIGURATION.mq2_gpio_pin, GPIO.IN)
         # create queue to hold MQ2 LED status
         mq2_queue = MPQueue()
         # start sub process to monitor actual MQ2 sensor
-        Process(target=monitor_LED_sensor, args=(mq2_queue, queue)).start()
+        Process(target=monitor_LED_sensor, args=(mq2_queue, heater_queue, heater_relay)).start()
 
         return mq2_queue
     else:
@@ -247,44 +234,37 @@ def initialize_gas_sensor(is_mq2_enabled, mq2_io_pin):
 
     return None
 
-if __name__ == '__main__':
+def run_pi_warmer():
     # set up logging
-    logger = logging.getLogger("heater")
-    logger.setLevel(LOG_LEVEL)
-
     handler = logging.handlers.RotatingFileHandler(
-        LOG_FILENAME, maxBytes=1048576, backupCount=3)
+        CONFIGURATION.log_filename, maxBytes=1048576, backupCount=3)
     formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
     # create heater relay instance
-    heater = PowerRelay()
+    heater_relay = PowerRelay()
+    heater_queue = MPQueue()
 
     # create queue to hold heater timer.
-    queue = MPQueue()
-    p = Process(target=start_heater_shutoff_timer, args=(queue,))
+    gas_sensor_queue = initialize_gas_sensor(heater_relay, heater_queue)
+    
+    p = Process(target=start_heater_shutoff_timer, args=(heater_queue))
     Empty = Queue.Empty
 
-    ser = initialize_modem(SERIAL_PORT, BAUDRATE)
+    ser = initialize_modem()
 
     if ser is None:
         print "no serial device"
         logger.warning("Serial Device not connected")
         exit()
 
-    fona = Fona(name="fona", ser=ser, allowednumbers=ALLOWED_NUMBERS)
-
-    # create queue to hold heater timer.
-    queue = MPQueue()
-    Empty = Queue.Empty
-
-    gas_sensor_queue = initialize_gas_sensor(MQ2, MQ2_GPIO_PIN)
+    fona = Fona(name="fona", ser=ser, allowednumbers=CONFIGURATION.allowed_phone_numbers)
 
     # make sure and turn heater off
-    heater.switch_low()
+    heater_relay.switch_low()
     logger.info("Starting SMS monitoring and heater service")
-    for phone_number in ALLOWED_NUMBERS:
+    for phone_number in CONFIGURATION.allowed_phone_numbers:
         fona.send_message('"+' + phone_number + '"',
                           "piWarmer powered on. Initializing. Wait to send messages...")
         logger.info("Sent starting message to " + phone_number)
@@ -293,25 +273,25 @@ if __name__ == '__main__':
     # dont send out a confirmation to these numbers because we are just deleting them and not processing them
     num_deleted = fona.delete_messages()
     if num_deleted > 0:
-        for phone_number in ALLOWED_NUMBERS:
+        for phone_number in CONFIGURATION.allowed_phone_numbers:
             fona.send_message('"+' + phone_number + '"',
                               "Old or unprocessed message(s) found on SIM Card. Deleting...")
         logger.info(str(num_deleted) + " old message cleared from SIM Card")
 
-    if MQ2:
+    if CONFIGURATION.is_mq2_enabled:
         gas_status = get_mq2_status()
         if "off" in gas_status:
             gas_status = "No gas detected"
         if "on" in gas_status:
             gas_status = "Gas detected"
-        for phone_number in ALLOWED_NUMBERS:
+        for phone_number in CONFIGURATION.allowed_phone_numbers:
             fona.send_message('"+' + phone_number + '"',
                               "MQ2 Gas Sensor Enabled. Status is " + gas_status)
 
     print "Starting to monitor for SMS Messages..."
     logger.info("Begin monitoring for SMS messages")
 
-    for phone_number in ALLOWED_NUMBERS:
+    for phone_number in CONFIGURATION.allowed_phone_numbers:
         fona.send_message('"+' + phone_number + '"',
                           "piWarmer monitoring started. Ok to send messages now. Text ON,OFF,STATUS or SHUTDOWN to control heater")
         logger.info("Sent starting message to " + phone_number)
@@ -320,7 +300,7 @@ if __name__ == '__main__':
     flag = 0
 
     while True:
-        if MQ2:
+        if CONFIGURATION.is_mq2_enabled:
             try:
                 myLEDqstatus = gas_sensor_queue.get_nowait()
 
@@ -347,17 +327,17 @@ if __name__ == '__main__':
 
         # check the queue to deal with various issues, such as Max heater time and the gas sensor being tripped
         try:
-            status_queue = queue.get_nowait()
+            status_queue = heater_queue.get_nowait()
 
             if "On" in status_queue:
-                p = Process(target=start_heater_shutoff_timer, args=(queue,))
+                p = Process(target=start_heater_shutoff_timer, args=(heater_queue,))
                 p.start()
             if "Off" in status_queue:
                 p.terminate()
             if "max_time" in status_queue:
                 print "Max time reached. Heater turned OFF"
                 logger.info("Max time reached. Heater turned OFF")
-                heater.switch_low()
+                heater_relay.switch_low()
                 fona.send_message(
                     last_number, "Heater was turned off due to max time being reached")
         except Empty:
@@ -365,5 +345,8 @@ if __name__ == '__main__':
         # get messages on SIM Card
         messages = fona.get_messages()
         for message in messages:
-            response = process_message(message[2], message[1])
+            response = process_message(fona, message[2], heater_relay, heater_queue, message[1])
             print response
+
+if __name__ == '__main__':
+    run_pi_warmer()
