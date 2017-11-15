@@ -68,7 +68,6 @@ def get_mq2_status():
     if input_state == 0:
         return "on"
 
-
 def get_cleaned_phone_number(phone_number_to_clean):
     """ Returns a cleaned version of the phone number... safely. """
     if phone_number_to_clean:
@@ -76,10 +75,9 @@ def get_cleaned_phone_number(phone_number_to_clean):
 
     return False
 
-
 def process_message(message, phone_number=False):
     """ Process a SMS message/command. """
-    global last_number
+
     status = heater.get_status()
     message = message.lower()
     turn_on = True
@@ -171,14 +169,13 @@ def shutdown():
 
 # for safety, this thread starts a timer for when the heater was turned on
 # and turns it off when reached
-
-
-def heaterTimer(queue):
+def start_heater_shutoff_timer(heater_queue):
+    """ Starts a timer to turn off the heater. """
     print "Starting timer"
     logger.info("Starting Heater Timer. Max Time is " +
                 str(MAX_TIME / 60) + " minutes")
     time.sleep(MAX_TIME)
-    queue.put("max_time")
+    heater_queue.put("max_time")
     return
 
 
@@ -200,20 +197,6 @@ def monitor_LED_sensor(myLEDq, queue, client=False):
             myLEDq.put("no_warning")
         time.sleep(2)
 
-
-# class MyLogger(object):
-#     def __init__(self, logger_to_use, level):
-#         """Needs a logger and a logger level."""
-#         self.logger = logger_to_use
-#         self.level = level
-#
-#     def write(self, message_to_write):
-#         # Only log if there is a message (not just a new line)
-#         if message_to_write.rstrip() != "":
-#             self.logger.log(self.level, message_to_write.rstrip())
-#
-# 	def flush(self):
-# 		pass
 
 def initialize_modem(
         serial_port,
@@ -244,6 +227,25 @@ def initialize_modem(
 
     return serial_connection
 
+def initialize_gas_sensor(is_mq2_enabled, mq2_io_pin):
+    """ Initializes and enables the MQ2 Gas Sensor """
+    if is_mq2_enabled:
+        print "MQ2 Sensor enabled"
+        logger.info("MQ2 Gas Sensor enabled")
+        # setup MQ2 GPIO PINS
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(mq2_io_pin, GPIO.IN)
+        # create queue to hold MQ2 LED status
+        mq2_queue = MPQueue()
+        # start sub process to monitor actual MQ2 sensor
+        Process(target=monitor_LED_sensor, args=(mq2_queue, queue)).start()
+
+        return mq2_queue
+    else:
+        print "MQ2 Sensor not enabled"
+        logger.info("MQ2 Sensor not enabled")
+
+    return None
 
 if __name__ == '__main__':
     # set up logging
@@ -261,7 +263,7 @@ if __name__ == '__main__':
 
     # create queue to hold heater timer.
     queue = MPQueue()
-    p = Process(target=heaterTimer, args=(queue,))
+    p = Process(target=start_heater_shutoff_timer, args=(queue,))
     Empty = Queue.Empty
 
     ser = initialize_modem(SERIAL_PORT, BAUDRATE)
@@ -277,20 +279,7 @@ if __name__ == '__main__':
     queue = MPQueue()
     Empty = Queue.Empty
 
-    if MQ2:
-        print "MQ2 Sensor enabled"
-        logger.info("MQ2 Gas Sensor enabled")
-        # setup MQ2 GPIO PINS
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(MQ2_GPIO_PIN, GPIO.IN)
-        # create queue to hold MQ2 LED status
-        myLEDq = MPQueue()
-        # start sub process to monitor actual MQ2 sensor
-        Process(target=monitor_LED_sensor, args=(myLEDq, queue)).start()
-
-    else:
-        print "MQ2 Sensor not enabled"
-        logger.info("MQ2 Sensor not enabled")
+    gas_sensor_queue = initialize_gas_sensor(MQ2, MQ2_GPIO_PIN)
 
     # make sure and turn heater off
     heater.switch_low()
@@ -333,7 +322,7 @@ if __name__ == '__main__':
     while True:
         if MQ2:
             try:
-                myLEDqstatus = myLEDq.get_nowait()
+                myLEDqstatus = gas_sensor_queue.get_nowait()
 
                 # print "QUEUE: " + myLEDqstatus
                 if "gas_warning" in myLEDqstatus:
@@ -361,7 +350,7 @@ if __name__ == '__main__':
             status_queue = queue.get_nowait()
 
             if "On" in status_queue:
-                p = Process(target=heaterTimer, args=(queue,))
+                p = Process(target=start_heater_shutoff_timer, args=(queue,))
                 p.start()
             if "Off" in status_queue:
                 p.terminate()
