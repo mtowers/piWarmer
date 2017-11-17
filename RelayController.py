@@ -172,21 +172,19 @@ class RelayController(object):
         """ Handle a request to turn on. """
 
         if phone_number is None:
-            return CommandResponse.CommandResponse(False, False, "Phone number was empty.")
+            return CommandResponse.CommandResponse(CommandResponse.ERROR, "Phone number was empty.")
 
         self.log_info_message("Received ON request from " + phone_number)
 
         if status == "1":
-            return CommandResponse.CommandResponse(False,
-                                                   False,
+            return CommandResponse.CommandResponse(CommandResponse.NOOP,
                                                    "Heater is already ON")
 
         if self.is_gas_detected():
-            return CommandResponse.CommandResponse(False,
-                                                   True,
+            return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
                                                    "Gas warning. Not turning heater on")
 
-        return CommandResponse.CommandResponse(True, False,
+        return CommandResponse.CommandResponse(CommandResponse.HEATER_ON,
                                                "Heater turning on for "
                                                + str(self.configuration.max_minutes_to_run)
                                                + " minutes.")
@@ -199,15 +197,12 @@ class RelayController(object):
         if status == "1":
             try:
                 self.heater_relay.switch_low()
-                message_response = "Heater turned OFF"
                 self.heater_queue.put(OFF)
+                return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF, "Heater turned OFF")
             except:
-                message_response = self.log_warning_message(
-                    "Issue turning Heater OFF")
-        else:
-            message_response = "Heater is already OFF"
+                return CommandResponse.CommandResponse(CommandResponse.ERROR, "Issue turning Heater OFF")
 
-        return message_response
+        return CommandResponse.CommandResponse(CommandResponse.NOOP, "Heater is already OFF")
 
     def handle_status_request(self, status, phone_number):
         """ Handle a status request. """
@@ -223,7 +218,54 @@ class RelayController(object):
             message_response += ". GAS DETECTED"
 
         # $TODO - Add GAS & TEMP status into response
-        return message_response
+        return CommandResponse.CommandResponse(CommandResponse.STATUS, message_response)
+
+    def get_command_response(self, message, status, phone_number):
+        """ returns a command response based on the message. """
+        if "on" in message:
+            return self.handle_on_request(status, phone_number)
+        elif "off" in message:
+            return self.handle_off_request(status, phone_number)
+        elif "status" in message:
+            return self.handle_status_request(status, phone_number)
+        elif "shutdown" in message:
+            return CommandResponse.CommandResponse(CommandResponse.PI_WARMER_OFF,
+                                                   "Received SHUTDOWN request from " + phone_number)
+
+        return CommandResponse.CommandResponse(CommandResponse.HELP,
+                                               "Please text ON,OFF,STATUS or"
+                                               + " SHUTDOWN to control heater")
+
+    def execute_command(self, command_response):
+        """ Executes the action the controller has determined. """
+
+        # The commands "Help", "Status", and "NoOp"
+        # only send responses back to the caller
+        # and do not change the heater relay
+        # or the Pi
+        if command_response.get_command() == CommandResponse.PI_WARMER_OFF:
+            try:
+                self.shutdown()
+            except:
+                self.log_warning_message(
+                    "Issue shutting down Raspberry Pi")
+        elif command_response.get_command() == CommandResponse.HEATER_OFF:
+            try:
+                self.heater_relay.switch_low()
+                self.log_info_message("Heater turned OFF")
+                self.heater_queue.put(OFF)
+            except:
+                self.log_warning_message(
+                    "Issue turning off Heater")
+        elif command_response.get_command() == CommandResponse.HEATER_ON:
+            try:
+                self.heater_relay.switch_high()
+                self.log_info_message("Heater turned ON")
+                self.heater_queue.put(ON)
+
+            except:
+                self.log_warning_message(
+                    "Issue turning on Heater")
 
     def process_message(self, message, phone_number=False):
         """ Process a SMS message/command. """
@@ -232,7 +274,6 @@ class RelayController(object):
         message = message.lower()
         self.log_info_message("Processing message:" + message)
 
-        message_response = ""
         phone_number = get_cleaned_phone_number(phone_number)
 
         # check to see if this is an allowed phone number
@@ -242,48 +283,23 @@ class RelayController(object):
                 self.push_notification_number, unauth_message)
             return self.log_warning_message(unauth_message)
 
-        if "on" in message:
-            actions = self.handle_on_request(status, phone_number)
-            message_response = actions.get_messages()
+        command_response = self.get_command_response(
+            message, status, phone_number)
+        self.execute_command(command_response)
 
-            if actions.should_power_on():
-                try:
-                    self.heater_relay.switch_high()
-                    self.log_info_message("Heater turned ON")
-                    self.heater_queue.put("On")
-                    if phone_number:
-                        self.last_number = '"+' + phone_number + '"'
-                except:
-                    message_response = self.log_warning_message(
-                        "Issue turning on Heater")
-        elif "off" in message:
-            message_response = self.handle_off_request(status, phone_number)
-        elif "status" in message:
-            message_response = self.handle_status_request(status, phone_number)
-        elif "shutdown" in message:
-            message_response = self.log_info_message(
-                "Received SHUTDOWN request from " + phone_number)
-
-            try:
-                self.shutdown()
-            except:
-                message = self.log_warning_message(
-                    "Issue shutting down Raspberry Pi")
-        else:
-            message_response = self.log_info_message(
-                "Please text ON,OFF,STATUS or SHUTDOWN to control heater")
+        if phone_number:
+            self.last_number = phone_number
 
         if phone_number is not None:
-            self.fona.send_message(phone_number, message_response)
+            self.fona.send_message(
+                phone_number, command_response.get_message())
             self.log_info_message(
-                "Sent message: " + message_response + " to " + phone_number)
-
-            return message_response
+                "Sent message: " + command_response.get_message() + " to " + phone_number)
         else:
             self.log_warning_message(
-                "Phone number missing, unable to send response:" + message_response)
+                "Phone number missing, unable to send response:" + command_response.get_message())
 
-        return message_response
+        return command_response.get_message()
 
     def shutdown(self):
         """ Shuts down the Pi """
