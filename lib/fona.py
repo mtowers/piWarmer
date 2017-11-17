@@ -29,6 +29,13 @@ class Fona(object):
 
     def send_message(self, message_num, text):
         """ send a message to the specified phone number """
+
+        if message_num is None or text is None:
+            return
+
+        if not message_num.startswith('"+'):
+            message_num = '"+' + message_num + '"'
+
         self.send_command("AT+CMGF=1")
         self.send_command('AT+CMGS=' + message_num)
         self.send_command(text + chr(26))
