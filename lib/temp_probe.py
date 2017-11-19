@@ -17,33 +17,59 @@ import time
 # https://www.sunfounder.com/learn/Sensor-Kit-v1-0-for-Raspberry-Pi/lesson-17-ds18b20-temperature-sensor-sensor-kit-v1-0-for-pi.html
 
 def read_sensor(sensor_id):
-    """ Reads temperature from sensor and prints to stdout
-    id is the id of the sensor. """
-    tfile = open("/sys/bus/w1/devices/" + sensor_id + "/w1_slave")
-    text = tfile.read()
-    tfile.close()
-    secondline = text.split("\n")[1]
-    temperaturedata = secondline.split(" ")[9]
-    temperature = float(temperaturedata[2:])
-    temperature = temperature / 1000
-    print "Sensor: " + sensor_id + " - Current temperature : %0.3f C" % temperature
+    """
+    Reads temperature from sensor and prints to stdout
+    id is the id of the sensor.
 
-    return temperature
+    >>> read_sensor(None)
+    >>> read_sensor("1")
+    """
+
+    try:
+        tfile = open("/sys/bus/w1/devices/" + sensor_id + "/w1_slave")
+        text = tfile.read()
+        tfile.close()
+        secondline = text.split("\n")[1]
+        temperaturedata = secondline.split(" ")[9]
+        temperature = float(temperaturedata[2:])
+        temperature = temperature / 1000
+        print "Sensor: " + sensor_id + " - Current temperature : %0.3f C" % temperature
+
+        return temperature
+    except:
+        return None
 
 def read_sensors():
-    """ Reads temperature from all sensors found in /sys/bus/w1/devices/
-    starting with "28-... """
+    """
+    Reads temperature from all sensors found in /sys/bus/w1/devices/
+    starting with "28-...
+
+    >>> read_sensors()
+    Drivers not available.
+    No sensors found! Check connection.
+    []
+    """
     temperature_probe_values = []
 
-    for driver_file in os.listdir("/sys/bus/w1/devices/"):
-        if driver_file.startswith("28-"):
-            try:
-                temperature_probe_values.append(read_sensor(driver_file))
-            except:
-                print "Failed to read sensor"
+    try:
+        for driver_file in os.listdir("/sys/bus/w1/devices/"):
+            if driver_file.startswith("28-"):
+                try:
+                    probe_value = read_sensor(driver_file)
 
-    if temperature_probe_values.count == 0:
-        print "No sensors found! Check connection"
+                    if probe_value is not None:
+                        temperature_probe_values.append(probe_value)
+                except:
+                    print "Failed to read sensor"
+    except:
+        print "Drivers not available."
+
+    array_length = 0
+    if temperature_probe_values is not None:
+        array_length = len(temperature_probe_values)
+
+    if array_length == 0:
+        print "No sensors found! Check connection."
 
     return temperature_probe_values
 
@@ -59,9 +85,14 @@ def destroy():
     pass
 
 
-# Main starts here
-if __name__ == "__main__":
-    try:
-        loop()
-    except KeyboardInterrupt:
-        destroy()
+##################
+### UNIT TESTS ###
+##################
+if __name__ == '__main__':
+    import doctest
+
+    print "Starting tests."
+
+    doctest.testmod()
+
+    print "Tests finished"

@@ -69,7 +69,7 @@ class PiWarmerConfiguration(object):
 def test_configuration():
     """ Test that the configuration is valid. """
     assert is_local_debug()
-    
+
     config = PiWarmerConfiguration()
 
     assert config.allowed_phone_numbers is not None
