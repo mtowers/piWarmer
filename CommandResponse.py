@@ -31,3 +31,22 @@ class CommandResponse(object):
             self.__command__ = HELP
 
         self.__message__ = message
+
+##################
+### UNIT TESTS ###
+##################
+
+def test_invalid_command():
+    """ Test invalid commands into the response. """
+    command_response = CommandResponse("INVALID", "INVALID")
+    assert command_response.get_command() == HELP
+    assert command_response.get_message() == "INVALID"
+
+def test_valid_commands():
+    """ Test that valid commands come back as they should. """
+    for command in VALID_COMMANDS:
+        message = "2061234567 " + command + " message."
+        print "Testing " + command + " " + message
+        command_response = CommandResponse(command, message)
+        assert command_response.get_command() == command
+        assert command_response.get_message() == message

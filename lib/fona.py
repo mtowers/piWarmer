@@ -1,6 +1,7 @@
 """ Module to help with tha AdaFruit Fona modules """
 import time
 
+SECONDS_TO_WAIT_AFTER_SEND = 5
 
 class Fona(object):
     """Class that send messages with an Adafruit Fona
@@ -11,16 +12,16 @@ class Fona(object):
 
     def __init__(self, name, ser, allowednumbers):
         self.name = name
-        self.ser = ser
+        self.serial_connection = ser
         self.allowednumbers = allowednumbers
 
     def send_command(self, com):
         """ send a command to the modem """
-        self.ser.write(com + "\r\n")
+        self.serial_connection.write(com + "\r\n")
         time.sleep(2)
         ret = []
-        while self.ser.inWaiting() > 0:
-            msg = self.ser.readline().strip()
+        while self.serial_connection.inWaiting() > 0:
+            msg = self.serial_connection.readline().strip()
             msg = msg.replace("\r", "")
             msg = msg.replace("\n", "")
             if msg != "":
@@ -39,7 +40,7 @@ class Fona(object):
         self.send_command("AT+CMGF=1")
         self.send_command('AT+CMGS=' + message_num)
         self.send_command(text + chr(26))
-        time.sleep(5)
+        time.sleep(SECONDS_TO_WAIT_AFTER_SEND)
 
     def get_messages(self, confirmation=True):
         """ reads text messages on the SIM card and returns
@@ -47,11 +48,11 @@ class Fona(object):
         # put into SMS mode
         self.send_command("AT+CMGF=1")
         # get all text messages currently on SIM Card
-        self.ser.write('AT+CMGL="ALL"\r')
+        self.serial_connection.write('AT+CMGL="ALL"\r')
         time.sleep(3)
         messages = []
-        while self.ser.inWaiting() > 0:
-            line = self.ser.readline().strip()
+        while self.serial_connection.inWaiting() > 0:
+            line = self.serial_connection.readline().strip()
             if "+CMGL:" in line:
                 message_details = []
                 metadata_list = line.split(",")
@@ -61,7 +62,7 @@ class Fona(object):
 
                 message_details.append(message_id)
                 message_details.append(message_num)
-                message_line = self.ser.readline().strip()
+                message_line = self.serial_connection.readline().strip()
                 message_details.append(message_line)
                 messages.append(message_details)
 

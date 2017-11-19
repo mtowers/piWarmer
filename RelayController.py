@@ -12,15 +12,34 @@ from lib.relay import PowerRelay
 
 
 def get_cleaned_phone_number(phone_number_to_clean):
-    """ Returns a cleaned version of the phone number... safely. """
+    """
+    Returns a cleaned version of the phone number... safely.
+
+    >>> get_cleaned_phone_number('"2061234567"')
+    '2061234567'
+    >>> get_cleaned_phone_number('+2061234567')
+    '2061234567'
+    >>> get_cleaned_phone_number('""+2061234567')
+    '2061234567'
+    >>> get_cleaned_phone_number('2061234567')
+    '2061234567'
+    >>> get_cleaned_phone_number('(206) 123-4567')
+    '2061234567'
+    >>> get_cleaned_phone_number(None)
+    """
     if phone_number_to_clean:
-        return phone_number_to_clean.replace('"', '').replace("+", '')
+        cleansed_number = phone_number_to_clean.replace('"', '').replace("+", '')
+        cleansed_number = cleansed_number.replace("-", '').replace('(', '')
+        cleansed_number = cleansed_number.replace(')', '').replace(" ", '')
+
+        return cleansed_number
 
     return None
 
 
 OFF = "Off"
 ON = "On"
+MAX_TIME = "MAX_TIME"
 
 
 class RelayController(object):
@@ -108,7 +127,7 @@ class RelayController(object):
     def send_message_to_all_numbers(self, message):
         """ Sends a message to ALL of the numbers in the configuration. """
         if message is None:
-            return
+            return False
 
         for phone_number in self.configuration.allowed_phone_numbers:
             self.fona.send_message(phone_number, message)
@@ -117,6 +136,8 @@ class RelayController(object):
                 not in self.configuration.allowed_phone_numbers):
             self.fona.send_message(
                 self.configuration.push_notification_number, message)
+
+        return True
 
     def log_info_message(self, message_to_log):
         """ Log and print at Info level """
@@ -133,7 +154,9 @@ class RelayController(object):
         return message_to_log
 
     def push_notification_number(self):
-        """ Returns a phone number to return command responses back to. """
+        """
+        Returns a phone number to return command responses back to.
+        """
         if self.last_number is not None:
             return self.last_number
 
@@ -151,11 +174,11 @@ class RelayController(object):
         if input_state == 1:
             return OFF
         if input_state == 0:
-            return "on"
+            return ON
 
     def is_gas_detected(self):
         """ Returns True if gas is detected. """
-        if self.configuration.is_mq2_enabled and self.get_mq2_status() == "on":
+        if self.configuration.is_mq2_enabled and self.get_mq2_status() == ON:
             return True
 
         return False
@@ -198,11 +221,14 @@ class RelayController(object):
             try:
                 self.heater_relay.switch_low()
                 self.heater_queue.put(OFF)
-                return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF, "Heater turned OFF")
+                return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
+                                                       "Heater turned OFF")
             except:
-                return CommandResponse.CommandResponse(CommandResponse.ERROR, "Issue turning Heater OFF")
+                return CommandResponse.CommandResponse(CommandResponse.ERROR,
+                                                       "Issue turning Heater OFF")
 
-        return CommandResponse.CommandResponse(CommandResponse.NOOP, "Heater is already OFF")
+        return CommandResponse.CommandResponse(CommandResponse.NOOP,
+                                               "Heater is already OFF")
 
     def handle_status_request(self, status, phone_number):
         """ Handle a status request. """
@@ -315,7 +341,7 @@ class RelayController(object):
         self.log_info_message("Starting Heater Timer. Max Time is " +
                               str(self.configuration.max_minutes_to_run) + " minutes")
         time.sleep(self.configuration.max_minutes_to_run * 60)
-        self.heater_queue.put("max_time")
+        self.heater_queue.put(MAX_TIME)
         return
 
     def monitor_gas_sensor(self):
@@ -424,13 +450,13 @@ class RelayController(object):
             try:
                 status_queue = self.heater_queue.get_nowait()
 
-                if "On" in status_queue:
+                if ON in status_queue:
                     self.shutoff_timer_process = Process(
                         target=self.start_heater_shutoff_timer, args=())
                     self.shutoff_timer_process.start()
                 if OFF in status_queue:
                     self.shutoff_timer_process.terminate()
-                if "max_time" in status_queue:
+                if MAX_TIME in status_queue:
                     self.log_info_message(
                         "Max time reached. Heater turned OFF")
                     self.heater_relay.switch_low()
@@ -445,3 +471,13 @@ class RelayController(object):
                 response = self.process_message(
                     message[2], message[1])
                 self.log_info_message(response)
+
+
+if __name__ == '__main__':
+    import doctest
+
+    print "Starting tests."
+
+    doctest.testmod()
+
+    print "Tests finished"
