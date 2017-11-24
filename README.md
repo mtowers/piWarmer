@@ -15,9 +15,20 @@ Use the piWarmer image (https://github.com/mdegrazia/piWarmer/releases)  for eas
 
 ****piWarmer is to be used at your own risk****
 
-# Additional Links And Setup Notes
+## Additional Links And Setup Notes
 ** The MQ-2 needs to be installed with an analog-to-digital converted **
 You need to enable I2C using `raspi-config`
 You need to modprobe two modules for the temperature sensor to work `w1-gpio` and `w1-therm`
+
+### MQ-2 Sensdor
 https://tutorials-raspberrypi.com/configure-and-read-out-the-raspberry-pi-gas-sensor-mq-x/
+http://www.learningaboutelectronics.com/Articles/MQ-2-smoke-sensor-circuit-with-raspberry-pi.php
+
+### Temp Sensore
 https://www.sunfounder.com/learn/Sensor-Kit-v1-0-for-Raspberry-Pi/lesson-17-ds18b20-temperature-sensor-sensor-kit-v1-0-for-pi.html
+
+### Fona
+https://learn.adafruit.com/adafruit-fona-808-cellular-plus-gps-breakout?view=all
+https://learn.adafruit.com/adafruit-fona-mini-gsm-gprs-cellular-phone-module?view=all
+https://learn.adafruit.com/adafruit-fona-mini-gsm-gprs-cellular-phone-module/handy-commands
+https://cdn-learn.adafruit.com/downloads/pdf/adafruit-fona-mini-gsm-gprs-cellular-phone-module.pdf
