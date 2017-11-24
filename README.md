@@ -14,3 +14,10 @@ There is a configuration file, piWarmer.config that must be edited that contains
 Use the piWarmer image (https://github.com/mdegrazia/piWarmer/releases)  for easy installation. See the Wiki (https://github.com/mdegrazia/piWarmer/wiki) for parts needed, assembly instructions and software installation instructions.
 
 ****piWarmer is to be used at your own risk****
+
+# Additional Links And Setup Notes
+** The MQ-2 needs to be installed with an analog-to-digital converted **
+You need to enable I2C using `raspi-config`
+You need to modprobe two modules for the temperature sensor to work `w1-gpio` and `w1-therm`
+https://tutorials-raspberrypi.com/configure-and-read-out-the-raspberry-pi-gas-sensor-mq-x/
+https://www.sunfounder.com/learn/Sensor-Kit-v1-0-for-Raspberry-Pi/lesson-17-ds18b20-temperature-sensor-sensor-kit-v1-0-for-pi.html
