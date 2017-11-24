@@ -16,7 +16,7 @@
 #	ADC.write(Value)	# Value range from 0 to 255		
 #
 #------------------------------------------------------
-# pip install smbus-cffi
+# pip install smbus2
 import smbus
 import time
 
