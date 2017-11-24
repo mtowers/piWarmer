@@ -11,6 +11,9 @@ import time
 # probe is ready for use.
 # sudo modprobe w1-gpio
 # sudo modprobe w1-therm
+#
+# You also must modify the /boot/config.txt to include:
+# dtoverlay=w1-gpio
 #----------------------------------------------------------------
 
 # Modified from SunFounder's page at
