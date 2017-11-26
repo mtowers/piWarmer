@@ -52,7 +52,7 @@ class RelayController(object):
         # We don't want old messages being processed
         # dont send out a confirmation to these numbers because we are
         # just deleting them and not processing them
-        num_deleted = self.fona.delete_messages()
+        num_deleted = self.fona.delete_messages(False)
         if num_deleted > 0:
             for phone_number in self.configuration.allowed_phone_numbers:
                 self.fona.send_message(phone_number,
@@ -469,7 +469,7 @@ class RelayController(object):
             messages = self.fona.get_messages()
             for message in messages:
                 response = self.process_message(
-                    message[2], message[1])
+                    message.message_text, message.sender_number)
                 self.log_info_message(response)
 
 

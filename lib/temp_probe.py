@@ -3,9 +3,9 @@
 import os
 import time
 
-#----------------------------------------------------------------
-#	Note:
-#		ds18b20's data pin must be connected to pin7.
+# ---------------------------------------------------------------
+# Note:
+# ds18b20's data pin must be connected to pin7.
 #
 # The following steps must be taken from the kernel to make sure
 # probe is ready for use.
@@ -14,10 +14,19 @@ import time
 #
 # You also must modify the /boot/config.txt to include:
 # dtoverlay=w1-gpio
-#----------------------------------------------------------------
+# ---------------------------------------------------------------
 
 # Modified from SunFounder's page at
 # https://www.sunfounder.com/learn/Sensor-Kit-v1-0-for-Raspberry-Pi/lesson-17-ds18b20-temperature-sensor-sensor-kit-v1-0-for-pi.html
+
+
+def celcius_to_farenheit(temp_in_celcius):
+    """
+    converts celcius to F.
+    Needs a float.
+    """
+    return ((temp_in_celcius * 9.0) / 5.0) + 32.0
+
 
 def read_sensor(sensor_id):
     """
@@ -36,11 +45,13 @@ def read_sensor(sensor_id):
         temperaturedata = secondline.split(" ")[9]
         temperature = float(temperaturedata[2:])
         temperature = temperature / 1000
-        print "Sensor: " + sensor_id + " - Current temperature : %0.3f C" % temperature
+        print "Sensor: " + sensor_id + " : %0.3f C" % temperature
+        print "Sensor: " + sensor_id + " : %0.3f F" % celcius_to_farenheit(temperature)
 
-        return temperature
+        return celcius_to_farenheit(temperature)
     except:
         return None
+
 
 def read_sensors():
     """
@@ -76,11 +87,13 @@ def read_sensors():
 
     return temperature_probe_values
 
+
 def loop():
     """ read temperature every second for all connected sensors """
     while True:
         read_sensors()
         time.sleep(1)
+
 
 # Nothing to cleanup
 def destroy():
@@ -88,9 +101,9 @@ def destroy():
     pass
 
 
-##################
-### UNIT TESTS ###
-##################
+##############
+# UNIT TESTS #
+##############
 if __name__ == '__main__':
     import doctest
 
