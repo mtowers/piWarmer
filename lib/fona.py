@@ -363,12 +363,12 @@ class Fona(object):
 
 if __name__ == '__main__':
     import serial
-    allowed_numbers = {'2066795094', '18558655971'}
+    allowed_numbers = {'2061234567', '18558655971'}
     serial_connection = serial.Serial('/dev/ttyUSB0', 9600)
     fona = Fona("Fona", serial_connection, allowed_numbers)
     # fona.get_carrier()
     battery_condition = fona.get_current_battery_condition()
-    fona.send_message("2066795094", "Time:" + str(time.time())
+    fona.send_message("2061234567", "Time:" + str(time.time())
                                     + ", PCT:" + str(battery_condition.battery_percent)
                                     + ", mAH:" + str(battery_condition.milliamp_hours))
     # fona.get_signal_strength()

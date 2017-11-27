@@ -1,45 +1,60 @@
 """ Module to help with the gas sensor. """
 
-import RPi.GPIO as GPIO
 import time
+import smbus
 
-DEFAULT_READ_GPIO_PIN = 23
-DEFAULT_WRITE_GPIO_PIN = 24
+DEFAULT_IC2_BUS = 1
+DEFAULT_IC2_ADDRESS = 0x48
+DEVICE_REG_MODW1 = 0x00
+DEFAULT_CHANNEL_READ_OFFSET = 0x40
+DEFAULT_DEVICE_CHANNEL = 0
+DEFAULT_TRIGGER_THRESHOLD = 230
+DEFAULT_ALL_CLEAR_THRESHOLD = 220
 
 
 class GasSensor(object):
     """
     Class to help with the gas sensor.
     """
-    def __init__(self, read_pin, write_pin):
+    def __init__(self,
+                sensor_trigger_threshold = DEFAULT_TRIGGER_THRESHOLD,
+                sensor_all_clear_threshold = DEFAULT_ALL_CLEAR_THRESHOLD):
         print "Starting init"
-        GPIO.setmode(GPIO.BOARD)
-        GPIO.setwarnings(False)
-        GPIO.setup(write_pin, GPIO.IN)
-        GPIO.setup(read_pin, GPIO.IN)
+        self.ic2_bus = smbus.SMBus(DEFAULT_IC2_BUS)
+        self.is_gas_detected = False
+        self.sensor_trigger_threshold = sensor_trigger_threshold
+        self.sensor_all_clear_threshold = sensor_all_clear_threshold
 
-        self.read_pin = read_pin
-        self.write_pin = write_pin
+    def read(self):
+        """
+        Read from the ic2 device.
+        """
+        self.ic2_bus.write_byte(DEFAULT_IC2_ADDRESS,
+                                DEFAULT_CHANNEL_READ_OFFSET)
 
-    def is_gas_present(self):
-        return GPIO.input(self.read_pin)
+        return self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
 
-    def start_alarm(self):
-        print GPIO.input(self.write_pin)
-        # GPIO.output(self.write_pin, GPIO.HIGH)
+    def update(self):
+        """
+        Attempts to look for gas.
+        """
 
-    def stop_alarm(self):
-        # GPIO.output(self.write_pin, GPIO.LOW)
-        self.start_alarm()
+        current_value = self.read()
+
+        if self.is_gas_detected:
+            self.is_gas_detected = current_value <= self.sensor_all_clear_threshold
+
+        self.is_gas_detected |= current_value >= self.sensor_trigger_threshold
+
+        return self.is_gas_detected
 
 
 if __name__ == '__main__':
-    print "Lul, wut?"
+    sensor = GasSensor()
+    
+    while True:
+        print str(sensor.read())
+        print str(sensor.update())
+        time.sleep(1)
 
-    sensor = GasSensor(DEFAULT_READ_GPIO_PIN, DEFAULT_WRITE_GPIO_PIN)
 
-    print "Sensor:" + str(sensor.is_gas_present())
-
-    sensor.start_alarm()
-    time.sleep(1)
-    sensor.stop_alarm()
