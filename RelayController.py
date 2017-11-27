@@ -72,6 +72,11 @@ class RelayController(object):
         Sends an alert if gas is detected. """
 
         initialization_message = ""
+        try:
+            self.mq2_sensor = gas_sensor.GasSensor()
+        except:
+            self.mq2_sensor = None
+
         is_detected = self.is_gas_detected()
 
         if self.configuration.is_mq2_enabled:
@@ -91,25 +96,28 @@ class RelayController(object):
         self.configuration = configuration
         self.logger = logger
         self.last_number = None
+        serial_connection = self.initialize_modem()
+        if serial_connection is None:
+            print "Nope"
+            exit()
+
+        self.fona = Fona("fona", serial_connection, self.configuration.allowed_phone_numbers)
+
+        self.mq2_sensor = None
         # create heater relay instance
         self.heater_relay = PowerRelay(
             "heater_relay", configuration.heater_gpio_pin)
         self.heater_queue = MPQueue()
 
         # create queue to hold heater timer.
-        self.gas_sensor_queue = self.initialize_gas_sensor()
+        self.gas_sensor_queue = self.__initialize_gas_sensor__()
 
         self.shutoff_timer_process = Process(target=self.start_heater_shutoff_timer,
                                              args=())
 
-        self.serial_connection = self.initialize_modem()
-
-        if self.serial_connection is None:
-            self.log_warning_message("Serial Device not connected, quiting.")
+        if self.fona is None:
+            self.log_warning_message("Uable to initialize, quiting.")
             exit()
-
-        self.fona = Fona(name="fona", ser=self.serial_connection,
-                         allowednumbers=self.configuration.allowed_phone_numbers)
 
         # make sure and turn heater off
         self.heater_relay.switch_low()
@@ -170,11 +178,11 @@ class RelayController(object):
 
     def get_mq2_status(self):
         """ Returns the state of the gas detector """
-        input_state = GPIO.input(self.configuration.mq2_gpio_pin)
-        if input_state == 1:
-            return OFF
-        if input_state == 0:
+
+        if self.mq2_sensor is not None and self.mq2_sensor.update():
             return ON
+
+        return OFF
 
     def is_gas_detected(self):
         """ Returns True if gas is detected. """
@@ -365,21 +373,21 @@ class RelayController(object):
                 self.gas_sensor_queue.put("no_warning")
             time.sleep(2)
 
-    def initialize_modem(self,
-                         timeout=.1,
-                         rtscts=0,
-                         retries=4,
-                         seconds_between_retries=60):
+    def initialize_modem(self):
         """ Attempts to initialize the modem over the serial port. """
 
         serial_connection = None
+        retries = 4
 
-        while retries > 0 and serial_connection != None:
+        while retries > 0 and serial_connection == None:
             try:
+                print "Opening on " + self.configuration.cell_serial_port
+
                 serial_connection = serial.Serial(
                     self.configuration.cell_serial_port,
-                    self.configuration.cell_baud_rate, timeout, rtscts)
+                    self.configuration.cell_baud_rate)
             except:
+                print "ERROR"
                 self.log_info_message(
                     self.log_warning_message(
                         "SERIAL DEVICE NOT LOCATED."
@@ -399,8 +407,6 @@ class RelayController(object):
         if self.configuration.is_mq2_enabled:
             self.log_info_message("MQ2 Gas Sensor enabled")
             # setup MQ2 GPIO PINS
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.configuration.mq2_gpio_pin, GPIO.IN)
             # create queue to hold MQ2 LED status
             mq2_queue = MPQueue()
             # start sub process to monitor actual MQ2 sensor
@@ -475,9 +481,14 @@ class RelayController(object):
 
 if __name__ == '__main__':
     import doctest
+    import logging
+    import PiWarmerConfiguration
 
     print "Starting tests."
 
     doctest.testmod()
+    config = PiWarmerConfiguration.PiWarmerConfiguration()
+
+    controller = RelayController(config, logging.getLogger("Controller"))
 
     print "Tests finished"

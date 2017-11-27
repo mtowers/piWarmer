@@ -16,7 +16,7 @@ def is_local_debug():
     return platform in ["win32", "darwin"]
 
 
-def get_confile_file_location():
+def get_config_file_location():
     """
     Get the location of the configuration file.
 
@@ -26,7 +26,7 @@ def get_confile_file_location():
     if is_local_debug():
         return './piWarmer.config'
 
-    return '/home/pi/Desktop/piWarmer.config'
+    return './piWarmer.config'
 
 
 class PiWarmerConfiguration(object):
@@ -41,8 +41,10 @@ class PiWarmerConfiguration(object):
         return self.__config_parser__.get('SETTINGS', 'LOGFILE')
 
     def __init__(self):
+        print "SETTINGS" + get_config_file_location()
+
         self.__config_parser__ = SafeConfigParser()
-        self.__config_parser__.read(get_confile_file_location())
+        self.__config_parser__.read(get_config_file_location())
         self.cell_serial_port = self.__config_parser__.get(
             'SETTINGS', 'SERIAL_PORT')
         self.cell_baud_rate = self.__config_parser__.get('SETTINGS', 'BAUDRATE')
@@ -50,8 +52,6 @@ class PiWarmerConfiguration(object):
             'SETTINGS', 'HEATER_GPIO_PIN')
         self.is_mq2_enabled = self.__config_parser__.getboolean('SETTINGS', 'MQ2')
         self.is_temp_probe_enabled = self.__config_parser__.getboolean('SETTINGS', 'TEMP')
-        self.mq2_gpio_pin = self.__config_parser__.getint(
-            'SETTINGS', 'MQ2_GPIO_PIN')
         self.allowed_phone_numbers = self.__config_parser__.get(
             'SETTINGS', 'ALLOWED_PHONE_NUMBERS')
         self.push_notification_number = self.__config_parser__.get('SETTINGS',
@@ -83,7 +83,6 @@ def test_configuration():
     assert config.is_temp_probe_enabled is not None
     assert config.log_filename is not None
     assert config.max_minutes_to_run == 60
-    assert config.mq2_gpio_pin is not None
     assert config.push_notification_number is not None
 
 if __name__ == '__main__':

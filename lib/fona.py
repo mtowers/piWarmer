@@ -384,7 +384,7 @@ class Fona(object):
 
     def delete_messages(self, confirmation=True):
         """ Deletes any messages. """
-        messages = self.get_messages(confirmation=False)
+        messages = self.get_messages()
         messages_deleted = 0
         for message in messages:
             messages_deleted += 1
