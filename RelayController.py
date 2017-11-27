@@ -9,6 +9,7 @@ import CommandResponse
 import lib.gas_sensor as gas_sensor
 from lib.fona import Fona
 from lib.relay import PowerRelay
+import lib.temp_probe as temp_probe
 
 
 def get_cleaned_phone_number(phone_number_to_clean):
@@ -106,6 +107,10 @@ class RelayController(object):
                          self.configuration.allowed_phone_numbers)
 
         self.mq2_sensor = None
+        if self.configuration.is_temp_probe_enabled:
+            temp_message = "Temp sensor enabled and reporting " + str(temp_probe.read_sensors()[0]) + "F"
+            self.send_message_to_all_numbers(temp_message)
+
         # create heater relay instance
         self.heater_relay = PowerRelay(
             "heater_relay", configuration.heater_gpio_pin)
