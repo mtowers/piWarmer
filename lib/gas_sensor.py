@@ -16,9 +16,10 @@ class GasSensor(object):
     """
     Class to help with the gas sensor.
     """
+
     def __init__(self,
-                sensor_trigger_threshold = DEFAULT_TRIGGER_THRESHOLD,
-                sensor_all_clear_threshold = DEFAULT_ALL_CLEAR_THRESHOLD):
+                 sensor_trigger_threshold=DEFAULT_TRIGGER_THRESHOLD,
+                 sensor_all_clear_threshold=DEFAULT_ALL_CLEAR_THRESHOLD):
         print "Starting init"
         self.ic2_bus = smbus.SMBus(DEFAULT_IC2_BUS)
         self.is_gas_detected = False
@@ -51,10 +52,8 @@ class GasSensor(object):
 
 if __name__ == '__main__':
     sensor = GasSensor()
-    
+
     while True:
         print str(sensor.read())
         print str(sensor.update())
         time.sleep(1)
-
-

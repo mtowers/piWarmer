@@ -6,7 +6,7 @@ from multiprocessing import Queue as MPQueue
 from multiprocessing import Process
 import serial  # Requires "pyserial"
 import CommandResponse
-import RPi.GPIO as GPIO
+import lib.gas_sensor as gas_sensor
 from lib.fona import Fona
 from lib.relay import PowerRelay
 
@@ -28,7 +28,8 @@ def get_cleaned_phone_number(phone_number_to_clean):
     >>> get_cleaned_phone_number(None)
     """
     if phone_number_to_clean:
-        cleansed_number = phone_number_to_clean.replace('"', '').replace("+", '')
+        cleansed_number = phone_number_to_clean.replace(
+            '"', '').replace("+", '')
         cleansed_number = cleansed_number.replace("-", '').replace('(', '')
         cleansed_number = cleansed_number.replace(')', '').replace(" ", '')
 
@@ -101,7 +102,8 @@ class RelayController(object):
             print "Nope"
             exit()
 
-        self.fona = Fona("fona", serial_connection, self.configuration.allowed_phone_numbers)
+        self.fona = Fona("fona", serial_connection,
+                         self.configuration.allowed_phone_numbers)
 
         self.mq2_sensor = None
         # create heater relay instance
@@ -373,13 +375,12 @@ class RelayController(object):
                 self.gas_sensor_queue.put("no_warning")
             time.sleep(2)
 
-    def initialize_modem(self):
+    def initialize_modem(self, retries=4, seconds_between_retries=10):
         """ Attempts to initialize the modem over the serial port. """
 
         serial_connection = None
-        retries = 4
 
-        while retries > 0 and serial_connection == None:
+        while retries > 0 and serial_connection is None:
             try:
                 print "Opening on " + self.configuration.cell_serial_port
 

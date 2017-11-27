@@ -28,8 +28,8 @@ class Battery_Condition:
             self.error_state = True
         else:
             tokens = command_result.split(':')
-        
-            if tokens is None or len(tokens) <=1:
+
+            if tokens is None or len(tokens) <= 1:
                 self.error_state = True
 
             results = tokens[1].split(',')
@@ -39,12 +39,13 @@ class Battery_Condition:
 
         if not self.error_state:
             self.charge_state = float(results[0])
-            self.battery_percent =float(results[1])
+            self.battery_percent = float(results[1])
             self.milliamp_hours = float(results[2]) / 10.0
         else:
             self.charge_state = 0
             self.battery_percent = 0
             self.milliamp_hours = 0
+
 
 class Signal_Strength(object):
     """
@@ -81,6 +82,7 @@ class Signal_Strength(object):
         except:
             self.received_signal_strength = 0
             self.bit_error_rate = 0
+
 
 class Sms_Message(object):
     """
@@ -122,7 +124,7 @@ class Fona(object):
         self.serial_connection.flushOutput()
         self.allowednumbers = allowednumbers
         self.send_command("AT")
-        #self.send_command("AE0")
+        # self.send_command("AE0")
         self.disable_verbose_errors()
         self.set_sms_mode()
 
@@ -141,7 +143,8 @@ class Fona(object):
         num_bytes_written = self.serial_connection.write(text)
         self.serial_connection.flush()
 
-        self.command_history.append("self.write_to_fona(" + self.escape(text) + ")")
+        self.command_history.append(
+            "self.write_to_fona(" + self.escape(text) + ")")
 
         # print "Checking return"
         # print "Wrote " + str(num_bytes_written) + ", expected " + str(len(text))
@@ -157,7 +160,8 @@ class Fona(object):
         read_buffer = ""
         start_time = time.time()
 
-        self.command_history.append("self.read_from_fona(" + str(response_timeout) + ")")
+        self.command_history.append(
+            "self.read_from_fona(" + str(response_timeout) + ")")
 
         # print "   starting read"
         while self.serial_connection.inWaiting() > 0:
@@ -180,22 +184,22 @@ class Fona(object):
         ret = []
         start_time = time.time()
 
-
         while not should_quit:
             try:
                 command = str(input("READY:"))
                 if command == "quit":
                     should_quit = True
                 else:
-                    ret.append("time.sleep(" + str(time.time() - start_time) + ")")
+                    ret.append(
+                        "time.sleep(" + str(time.time() - start_time) + ")")
                     write_result = self.write_to_fona(command)
                     start_time = time.time()
                     print write_result
 
                     print self.read_from_fona(DEFAULT_RESPONSE_READ_TIMEOUT)
-            except error:
-                print "ERROR:" + str(error)
-            
+            except:
+                print "ERROR"
+
         for command in self.command_history:
             print command
 
@@ -203,15 +207,15 @@ class Fona(object):
         """
         Replaces escape sequences do they can be printed.
         """
-        return text.replace('\r', '\\r').replace('\n', '\\n').replace('\x1a','\\x1a')
-
+        return text.replace('\r', '\\r').replace('\n', '\\n').replace('\x1a', '\\x1a')
 
     def send_command(self, com, add_eol=True):
         """ send a command to the modem """
         command = com
         if add_eol:
             command += '\r\r\n '
-        self.command_history.append("self.send_command(" + self.escape(command) + ")")
+        self.command_history.append(
+            "self.send_command(" + self.escape(command) + ")")
         self.serial_connection.write(command)
         time.sleep(2)
         ret = []
@@ -277,7 +281,7 @@ class Fona(object):
         """
         if phone_number:
             return phone_number.replace('+', '').replace('(', '').replace(')',
-                '').replace('-', '')
+                                                                          '').replace('-', '')
 
         return None
 
@@ -339,7 +343,6 @@ class Fona(object):
         print self.read_from_fona(2)
         print "Check phone"
 
-
         return True
 
     def get_messages(self):
@@ -396,8 +399,8 @@ class Fona(object):
                 print phone_number
                 if phone_number in self.allowednumbers:
                     self.send_message(
-                            message.sender_number,
-                            "Message Received: " + message.message_text)
+                        message.sender_number,
+                        "Message Received: " + message.message_text)
 
         return messages_deleted
 

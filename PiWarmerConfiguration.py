@@ -47,15 +47,18 @@ class PiWarmerConfiguration(object):
         self.__config_parser__.read(get_config_file_location())
         self.cell_serial_port = self.__config_parser__.get(
             'SETTINGS', 'SERIAL_PORT')
-        self.cell_baud_rate = self.__config_parser__.get('SETTINGS', 'BAUDRATE')
+        self.cell_baud_rate = self.__config_parser__.get(
+            'SETTINGS', 'BAUDRATE')
         self.heater_gpio_pin = self.__config_parser__.getint(
             'SETTINGS', 'HEATER_GPIO_PIN')
-        self.is_mq2_enabled = self.__config_parser__.getboolean('SETTINGS', 'MQ2')
-        self.is_temp_probe_enabled = self.__config_parser__.getboolean('SETTINGS', 'TEMP')
+        self.is_mq2_enabled = self.__config_parser__.getboolean(
+            'SETTINGS', 'MQ2')
+        self.is_temp_probe_enabled = self.__config_parser__.getboolean(
+            'SETTINGS', 'TEMP')
         self.allowed_phone_numbers = self.__config_parser__.get(
             'SETTINGS', 'ALLOWED_PHONE_NUMBERS')
         self.push_notification_number = self.__config_parser__.get('SETTINGS',
-                                                               'PUSH_NOTIFICATION_NUMBER')
+                                                                   'PUSH_NOTIFICATION_NUMBER')
         self.allowed_phone_numbers = self.allowed_phone_numbers.split(',')
         self.max_minutes_to_run = self.__config_parser__.getint(
             'SETTINGS', 'MAX_HEATER_TIME')
@@ -84,6 +87,7 @@ def test_configuration():
     assert config.log_filename is not None
     assert config.max_minutes_to_run == 60
     assert config.push_notification_number is not None
+
 
 if __name__ == '__main__':
     import doctest

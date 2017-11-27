@@ -10,6 +10,7 @@ NOOP = "NOOP"
 
 VALID_COMMANDS = {HEATER_OFF, HEATER_ON, PI_WARMER_OFF, STATUS, HELP}
 
+
 class CommandResponse(object):
     """ Object to return a command response. """
 
@@ -36,11 +37,13 @@ class CommandResponse(object):
 ### UNIT TESTS ###
 ##################
 
+
 def test_invalid_command():
     """ Test invalid commands into the response. """
     command_response = CommandResponse("INVALID", "INVALID")
     assert command_response.get_command() == HELP
     assert command_response.get_message() == "INVALID"
+
 
 def test_valid_commands():
     """ Test that valid commands come back as they should. """
