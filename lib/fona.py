@@ -46,6 +46,41 @@ class Battery_Condition:
             self.battery_percent = 0
             self.milliamp_hours = 0
 
+class Signal_Strength(object):
+    """
+    Class to hold the signal strength.
+    """
+
+    def classify_strength(self):
+        """
+        Gets a human meaning to the rssi.
+        """
+        if self.recieved_signal_strength is None:
+            return "Unknown"
+
+        if self.recieved_signal_strength <= 9:
+            return "Marginal"
+
+        if self.recieved_signal_strength <= 14:
+            return "OK"
+
+        if self.received_signal_strength <= 19:
+            return "Good"
+
+        return "Excellent"
+
+    def __init__(self, command_result):
+        """
+        Parses the command result.
+        """
+        try:
+            tokens = command_result.split(':')
+            tokens = tokens[1].split(',')
+            self.recieved_signal_strength = int(tokens[0])
+            self.bit_error_rate = int(tokens[1])
+        except:
+            self.received_signal_strength = 0
+            self.bit_error_rate = 0
 
 class Sms_Message(object):
     """
@@ -181,7 +216,7 @@ class Fona(object):
         time.sleep(2)
         ret = []
 
-        print "Starting read/wait"
+        # print "Starting read/wait"
         while self.serial_connection.inWaiting() > 0:
             msg = self.serial_connection.readline().strip()
             msg = msg.replace("\r", "")
@@ -201,7 +236,13 @@ class Fona(object):
         return self.send_command("AT+COPS?")
 
     def get_signal_strength(self):
-        return self.send_command("AT+CSQ")
+        command_result = self.send_command("AT+CSQ")
+        if command_result is None or len(command_result) < 2:
+            command_result = None
+        else:
+            command_result = command_result[1]
+
+        return Signal_Strength(command_result)
 
     def get_current_battery_condition(self):
         command_result = self.send_command("AT+CBC")
@@ -363,26 +404,28 @@ class Fona(object):
 
 if __name__ == '__main__':
     import serial
-    allowed_numbers = {'2061234567', '18558655971'}
+    phone_number = input("Phone number>")
+    allowed_numbers = {phone_number, '18558655971'}
     serial_connection = serial.Serial('/dev/ttyUSB0', 9600)
     fona = Fona("Fona", serial_connection, allowed_numbers)
     # fona.get_carrier()
     battery_condition = fona.get_current_battery_condition()
-    fona.send_message("2061234567", "Time:" + str(time.time())
-                                    + ", PCT:" + str(battery_condition.battery_percent)
-                                    + ", mAH:" + str(battery_condition.milliamp_hours))
-    # fona.get_signal_strength()
+    # fona.send_message(phone_number, "Time:" + str(time.time())
+    #                                + ", PCT:" + str(battery_condition.battery_percent)
+    #                                + ", mAH:" + str(battery_condition.milliamp_hours))
+    # print "Signal strength:"
+    signal_strength = fona.get_signal_strength()
+    print "Signal:" + signal_strength.classify_strength()
     # print fona.get_module_name()
     # print fona.get_sim_card_number()
-    # print fona.get_all_messages()
+    print fona.get_all_messages()
 
-    # for message in fona.get_messages():
-    #    print "ID:" + message.message_id
-    #    print "Date:" + message.message_date
-    #    print "Time:" + message.message_time
-    #    print "Num:" + message.sender_number
-    #    print "Stat:" + message.message_status
-    #    print "SMS:" + message.message_text
+    for message in fona.get_messages():
+        print "ID:" + message.message_id
+        print "Date:" + message.message_date
+        print "Time:" + message.message_time
+        print "Num:" + message.sender_number
+        print "Stat:" + message.message_status
+        print "SMS:" + message.message_text
 
     # fona.get_messages(False)
-    # print fona.send_message('2066795094', 'test')
