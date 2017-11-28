@@ -7,16 +7,70 @@ BATTERY_WARNING = 60
 DEFAULT_RESPONSE_READ_TIMEOUT = 5
 
 
-class Battery_Condition:
+def escape(text):
+    """
+    Replaces escape sequences do they can be printed.
+    """
+    return text.replace('\r', '\\r').replace('\n', '\\n').replace('\x1a', '\\x1a')
+
+
+def get_cleaned_phone_number(dirty_number):
+    """
+    Removes any text from the phone number that
+    could cause the command to not work.
+
+    >>> get_cleaned_phone_number('"2061234567"')
+    '2061234567'
+    >>> get_cleaned_phone_number('+2061234567')
+    '2061234567'
+    >>> get_cleaned_phone_number('""+2061234567')
+    '2061234567'
+    >>> get_cleaned_phone_number('2061234567')
+    '2061234567'
+    >>> get_cleaned_phone_number('(206) 123-4567')
+    '2061234567'
+    >>> get_cleaned_phone_number(None)
+    """
+    if PHONE_NUMBER:
+        return dirty_number.replace('+',
+                                    '').replace('(',
+                                                '').replace(')',
+                                                            '').replace('-',
+                                                                        '').replace(' ', '')
+    return None
+
+
+class BatteryCondition(object):
     """
     Class to keep the battery state.
     """
+
+    def is_error_state(self):
+        """
+        Were the results usable or in error?
+        """
+        return self.is_error_state
+
+    def get_percent_battery(self):
+        """
+        Returns the remaining percentage of battery.
+        """
+        return self.battery_percent
+
+    def get_capacity_remaining(self):
+        """
+        Returns the milliamp hours remaining.
+        """
+        return self.milliamp_hours
 
     def is_battery_ok(self):
         """
         Is the battery OK?
         """
-        return self.battery_percent
+        if self.is_error_state():
+            return False
+
+        return self.battery_percent > BATTERY_CRITICAL
 
     def __init__(self, command_result):
         """
@@ -47,10 +101,22 @@ class Battery_Condition:
             self.milliamp_hours = 0
 
 
-class Signal_Strength(object):
+class SignalStrength(object):
     """
     Class to hold the signal strength.
     """
+
+    def get_signal_strength(self):
+        """
+        Returns the signal strength.
+        """
+        return self.recieved_signal_strength
+
+    def get_bit_error_rate(self):
+        """
+        Returns the bit error rate from the Fona.
+        """
+        return self.bit_error_rate
 
     def classify_strength(self):
         """
@@ -65,7 +131,7 @@ class Signal_Strength(object):
         if self.recieved_signal_strength <= 14:
             return "OK"
 
-        if self.received_signal_strength <= 19:
+        if self.recieved_signal_strength <= 19:
             return "Good"
 
         return "Excellent"
@@ -80,32 +146,61 @@ class Signal_Strength(object):
             self.recieved_signal_strength = int(tokens[0])
             self.bit_error_rate = int(tokens[1])
         except:
-            self.received_signal_strength = 0
+            self.recieved_signal_strength = 0
             self.bit_error_rate = 0
 
 
-class Sms_Message(object):
+class SmsMessage(object):
     """
     Class to abstract a text message.
     """
 
+    def get_sender_number(self):
+        """
+        Gets the sender's number.
+        """
+        if self.is_message_ok():
+            return get_cleaned_phone_number(self.sender_number)
+
+        return None
+
+    def is_message_ok(self):
+        """
+        Is the message valid?
+        """
+        return not self.error_state
+
     def __init__(self,
-                 message_id,
-                 message_status,
-                 sender_number,
-                 message_date,
-                 message_time,
+                 message_header,
                  message_text):
         """
         Create the object.
         """
+        self.message_id = None
+        self.message_date = None
+        self.message_time = None
+        self.sender_number = None
+        self.message_status = None
+        self.message_text = None
 
-        self.message_id = message_id
-        self.message_date = message_date
-        self.message_time = message_time
-        self.sender_number = sender_number
-        self.message_status = message_status
-        self.message_text = message_text
+        try:
+            metadata_list = message_header.split(",")
+            message_id = metadata_list[0]
+            message_id = message_id.rpartition(":")[2].strip()
+            message_status = metadata_list[1]
+            sender_number = metadata_list[2]
+            message_date = metadata_list[4]
+            message_time = metadata_list[5]
+
+            self.message_id = message_id
+            self.message_date = message_date
+            self.message_time = message_time
+            self.sender_number = sender_number
+            self.message_status = message_status
+            self.message_text = message_text
+            self.error_state = False
+        except:
+            self.error_state = True
 
 
 class Fona(object):
@@ -144,12 +239,12 @@ class Fona(object):
         self.serial_connection.flush()
 
         self.command_history.append(
-            "self.write_to_fona(" + self.escape(text) + ")")
+            "self.write_to_fona(" + escape(text) + ")")
 
         # print "Checking return"
         # print "Wrote " + str(num_bytes_written) + ", expected " + str(len(text))
 
-        self.wait_until_fona_command_response()
+        self.wait_for_command_response()
 
         return num_bytes_written
 
@@ -203,19 +298,13 @@ class Fona(object):
         for command in self.command_history:
             print command
 
-    def escape(self, text):
-        """
-        Replaces escape sequences do they can be printed.
-        """
-        return text.replace('\r', '\\r').replace('\n', '\\n').replace('\x1a', '\\x1a')
-
     def send_command(self, com, add_eol=True):
         """ send a command to the modem """
         command = com
         if add_eol:
             command += '\r\r\n '
         self.command_history.append(
-            "self.send_command(" + self.escape(command) + ")")
+            "self.send_command(" + escape(command) + ")")
         self.serial_connection.write(command)
         time.sleep(2)
         ret = []
@@ -231,59 +320,79 @@ class Fona(object):
         return ret
 
     def disable_verbose_errors(self):
+        """
+        Disables verbose errors.
+        Required for AT+CMGS to work.
+        """
         return self.send_command("AT+CMEE=0")
 
     def enable_verbose_errors(self):
+        """
+        Enables trouble shooting errors.
+        """
         return self.send_command("AT+CMEE=2")
 
     def get_carrier(self):
+        """
+        Returns the carrier.
+        """
         return self.send_command("AT+COPS?")
 
     def get_signal_strength(self):
+        """
+        Returns an object representing the signal strength.
+        """
         command_result = self.send_command("AT+CSQ")
         if command_result is None or len(command_result) < 2:
             command_result = None
         else:
             command_result = command_result[1]
 
-        return Signal_Strength(command_result)
+        return SignalStrength(command_result)
 
     def get_current_battery_condition(self):
+        """
+        Returns an object representing the current battery state.
+        """
         command_result = self.send_command("AT+CBC")
         if command_result is None or len(command_result) < 2:
             command_result = None
         else:
             command_result = command_result[1]
 
-        return Battery_Condition(command_result)
+        return BatteryCondition(command_result)
 
     def get_module_name(self):
+        """
+        Returns the name of the GSM module.
+        """
         return self.send_command("ATI")
 
     def get_sim_card_number(self):
+        """
+        Returns the id of the sim card.
+        """
         return self.send_command("AT+CCID")
 
     def set_sms_mode(self):
+        """
+        Puts the card into SMS mode.
+        """
         return self.send_command("AT+CMGF=1")
 
     def get_message(self, index):
+        """
+        Returns the message at the given index.
+        """
         self.set_sms_mode()
         return self.send_command('AT+CMGL=' + index + '')
 
     def get_all_messages(self):
+        """
+        Returns the raw result of ALL the messages on the card.
+        """
         self.set_sms_mode()
         return self.send_command('AT+CMGL="ALL"')
-
-    def clean_phone_number(self, phone_number):
-        """
-        Removes any text from the phone number that
-        could cause the command to not work.
-        """
-        if phone_number:
-            return phone_number.replace('+', '').replace('(', '').replace(')',
-                                                                          '').replace('-', '')
-
-        return None
 
     def read_until_text(self, text):
         """
@@ -294,7 +403,7 @@ class Fona(object):
         start_time = time.time()
 
         while text not in read_text:
-            self.wait_until_fona_command_response()
+            self.wait_for_command_response()
             read_text += self.read_from_fona(2)
             elapsed_time = time.time() - start_time
 
@@ -304,7 +413,7 @@ class Fona(object):
 
         return read_text
 
-    def wait_until_fona_command_response(self):
+    def wait_for_command_response(self):
         """
         Waits until the command has a response
         """
@@ -320,7 +429,7 @@ class Fona(object):
         Sends a message to the specified phone numbers.
         """
 
-        cleaned_number = self.clean_phone_number(message_num)
+        cleaned_number = get_cleaned_phone_number(message_num)
 
         if cleaned_number is None or text is None:
             return
@@ -328,16 +437,16 @@ class Fona(object):
         print "Setting receiving number..."
         self.set_sms_mode()
         self.write_to_fona('\r\r\n')
-        if self.wait_until_fona_command_response:
+        if self.wait_for_command_response:
             print self.read_from_fona(5)
         self.write_to_fona('AT+CMGS="' + cleaned_number + '"')
-        self.wait_until_fona_command_response()
+        self.wait_for_command_response()
         print self.read_from_fona(5)
         self.write_to_fona('\r')
-        self.wait_until_fona_command_response()
+        self.wait_for_command_response()
         print self.read_from_fona(5)
         print self.write_to_fona(text + '\x1a')
-        self.wait_until_fona_command_response()
+        self.wait_for_command_response()
 
         self.command_history.append("self.read_from_fona()")
         print self.read_from_fona(2)
@@ -358,28 +467,12 @@ class Fona(object):
         time.sleep(3)
         messages = []
         while self.serial_connection.inWaiting() > 0:
-            line = self.serial_connection.readline().strip()
-            if "+CMGL:" in line:
-                message_details = []
-                metadata_list = line.split(",")
-                message_id = metadata_list[0]
-                message_status = metadata_list[1]
-                message_id = message_id.rpartition(":")[2].strip()
-                message_num = metadata_list[2]
-                message_date = metadata_list[4]
-                message_time = metadata_list[5]
+            message_header = self.serial_connection.readline().strip()
+            if "+CMGL:" in message_header:
+                message_text = self.serial_connection.readline().strip()
 
-                message_details.append(message_id)
-                message_details.append(message_num)
-                message_line = self.serial_connection.readline().strip()
-                message_details.append(message_line)
-
-                new_message = Sms_Message(message_id,
-                                          message_status,
-                                          message_num,
-                                          message_date,
-                                          message_time,
-                                          message_line)
+                new_message = SmsMessage(message_header,
+                                         message_text)
                 messages.append(new_message)
 
                 time.sleep(1)
@@ -389,41 +482,40 @@ class Fona(object):
         """ Deletes any messages. """
         messages = self.get_messages()
         messages_deleted = 0
-        for message in messages:
+        for message_to_delete in messages:
             messages_deleted += 1
-            self.send_command("AT+CMGD=" + str(message.message_id))
+            self.send_command("AT+CMGD=" + str(message_to_delete.message_id))
 
             if confirmation is True:
-                phone_number = message.sender_number.replace('"', '')
-                phone_number = phone_number.replace("+", '')
-                print phone_number
-                if phone_number in self.allowednumbers:
+                conf_number = get_cleaned_phone_number(
+                    message_to_delete.sender_number)
+
+                if conf_number in self.allowednumbers:
                     self.send_message(
-                        message.sender_number,
-                        "Message Received: " + message.message_text)
+                        conf_number,
+                        "Message Received: " + message_to_delete.message_text)
 
         return messages_deleted
 
 
 if __name__ == '__main__':
     import serial
-    phone_number = input("Phone number>")
-    allowed_numbers = {phone_number, '18558655971'}
-    serial_connection = serial.Serial('/dev/ttyUSB0', 9600)
-    fona = Fona("Fona", serial_connection, allowed_numbers)
+    PHONE_NUMBER = input("Phone number>")
+    FONA = Fona("Fona", serial.Serial('/dev/ttyUSB0', 9600),
+                {PHONE_NUMBER, '18558655971'})
     # fona.get_carrier()
-    battery_condition = fona.get_current_battery_condition()
+    BATTERY_CONDITION = FONA.get_current_battery_condition()
     # fona.send_message(phone_number, "Time:" + str(time.time())
     #                                + ", PCT:" + str(battery_condition.battery_percent)
     #                                + ", mAH:" + str(battery_condition.milliamp_hours))
     # print "Signal strength:"
-    signal_strength = fona.get_signal_strength()
-    print "Signal:" + signal_strength.classify_strength()
+    SIGNAL_STRENGTH = FONA.get_signal_strength()
+    print "Signal:" + SIGNAL_STRENGTH.classify_strength()
     # print fona.get_module_name()
     # print fona.get_sim_card_number()
-    print fona.get_all_messages()
+    print FONA.get_all_messages()
 
-    for message in fona.get_messages():
+    for message in FONA.get_messages():
         print "ID:" + message.message_id
         print "Date:" + message.message_date
         print "Time:" + message.message_time

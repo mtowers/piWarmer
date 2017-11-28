@@ -7,36 +7,9 @@ from multiprocessing import Process
 import serial  # Requires "pyserial"
 import CommandResponse
 import lib.gas_sensor as gas_sensor
-from lib.fona import Fona
+import lib.fona as Fona
 from lib.relay import PowerRelay
 import lib.temp_probe as temp_probe
-
-
-def get_cleaned_phone_number(phone_number_to_clean):
-    """
-    Returns a cleaned version of the phone number... safely.
-
-    >>> get_cleaned_phone_number('"2061234567"')
-    '2061234567'
-    >>> get_cleaned_phone_number('+2061234567')
-    '2061234567'
-    >>> get_cleaned_phone_number('""+2061234567')
-    '2061234567'
-    >>> get_cleaned_phone_number('2061234567')
-    '2061234567'
-    >>> get_cleaned_phone_number('(206) 123-4567')
-    '2061234567'
-    >>> get_cleaned_phone_number(None)
-    """
-    if phone_number_to_clean:
-        cleansed_number = phone_number_to_clean.replace(
-            '"', '').replace("+", '')
-        cleansed_number = cleansed_number.replace("-", '').replace('(', '')
-        cleansed_number = cleansed_number.replace(')', '').replace(" ", '')
-
-        return cleansed_number
-
-    return None
 
 
 OFF = "Off"
@@ -63,14 +36,8 @@ class RelayController(object):
             self.log_info_message(
                 str(num_deleted) + " old message cleared from SIM Card")
 
-    def ___send_message_to_all_numbers__(self, message):
-        """ Sends a message to all phone numbers. """
-        for phone_number in self.configuration.allowed_phone_numbers:
-            self.fona.send_message(phone_number, message)
-            self.log_info_message(message + " sent to " + phone_number)
-
-    def __initialize_gas_sensor__(self):
-        """ Initializes the gas sensor. Returns TRUE if gas is detected.
+    def __start_gas_sensor__(self):
+        """ Starts the gas sensor. Returns TRUE if gas is detected.
         Sends an alert if gas is detected. """
 
         initialization_message = ""
@@ -103,12 +70,13 @@ class RelayController(object):
             print "Nope"
             exit()
 
-        self.fona = Fona("fona", serial_connection,
-                         self.configuration.allowed_phone_numbers)
+        self.fona = Fona.Fona("fona", serial_connection,
+                              self.configuration.allowed_phone_numbers)
 
         self.mq2_sensor = None
         if self.configuration.is_temp_probe_enabled:
-            temp_message = "Temp sensor enabled and reporting " + str(temp_probe.read_sensors()[0]) + "F"
+            temp_message = "Temp sensor enabled and reporting " + \
+                str(temp_probe.read_sensors()[0]) + "F"
             self.send_message_to_all_numbers(temp_message)
 
         # create heater relay instance
@@ -117,7 +85,7 @@ class RelayController(object):
         self.heater_queue = MPQueue()
 
         # create queue to hold heater timer.
-        self.gas_sensor_queue = self.__initialize_gas_sensor__()
+        self.gas_sensor_queue = self.start_monitoring_gas_sensor()
 
         self.shutoff_timer_process = Process(target=self.start_heater_shutoff_timer,
                                              args=())
@@ -132,7 +100,7 @@ class RelayController(object):
         self.send_message_to_all_numbers(
             "piWarmer powered on. Initializing. Wait to send messages...")
         self.__clear_existing_messages__()
-        self.__initialize_gas_sensor__()
+        self.__start_gas_sensor__()
 
         self.log_info_message("Begin monitoring for SMS messages")
         self.send_message_to_all_numbers(
@@ -143,6 +111,8 @@ class RelayController(object):
         """ Sends a message to ALL of the numbers in the configuration. """
         if message is None:
             return False
+
+        self.log_info_message("Sending messages to all: " + message)
 
         for phone_number in self.configuration.allowed_phone_numbers:
             self.fona.send_message(phone_number, message)
@@ -315,7 +285,7 @@ class RelayController(object):
         message = message.lower()
         self.log_info_message("Processing message:" + message)
 
-        phone_number = get_cleaned_phone_number(phone_number)
+        phone_number = Fona.get_cleaned_phone_number(phone_number)
 
         # check to see if this is an allowed phone number
         if not self.is_allowed_phone_number(phone_number):
@@ -408,7 +378,7 @@ class RelayController(object):
 
         return serial_connection
 
-    def initialize_gas_sensor(self):
+    def start_monitoring_gas_sensor(self):
         """ Initializes and enables the MQ2 Gas Sensor """
         if self.configuration.is_mq2_enabled:
             self.log_info_message("MQ2 Gas Sensor enabled")
@@ -485,6 +455,9 @@ class RelayController(object):
                 self.log_info_message(response)
 
 
+#############
+# SELF TEST #
+#############
 if __name__ == '__main__':
     import doctest
     import logging
@@ -493,8 +466,8 @@ if __name__ == '__main__':
     print "Starting tests."
 
     doctest.testmod()
-    config = PiWarmerConfiguration.PiWarmerConfiguration()
+    CONFIG = PiWarmerConfiguration.PiWarmerConfiguration()
 
-    controller = RelayController(config, logging.getLogger("Controller"))
+    CONTROLLER = RelayController(CONFIG, logging.getLogger("Controller"))
 
     print "Tests finished"
