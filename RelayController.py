@@ -566,14 +566,13 @@ class RelayController(object):
         Service loop to run the PiWarmer
         """
         self.log_info_message('Press Ctrl-C to quit.')
-        flag = 0
 
         while not self.ready_for_service:
             print "."
             time.sleep(1)
 
         while True:
-            gas_detected = False
+            self.gas_detected = False
 
             if self.configuration.is_mq2_enabled:
                 try:
@@ -585,29 +584,37 @@ class RelayController(object):
                         else:
                             print "Q:" + gas_sensor_status
 
+                        print "has_been_detected=" + str(self.gas_detected)
+
+                        self.mq2_sensor.update()
+
                         # print "QUEUE: " + myLEDqstatus
                         if GAS_WARNING in gas_sensor_status:
-                            if not gas_detected:
+
+                            if not self.gas_detected:
                                 gas_status = "GAS DETECTED. Level=" + str(self.mq2_sensor.current_value)
 
                                 if self.heater_relay.get_status() == 1:
                                     gas_status += "SHUTTING HEATER DOWN"
                         
                                 self.log_warning_message(gas_status)
-                                gas_detected = True
 
-                                self.send_message_to_all_numbers(gas_status)
+                                # TODO - Figure out why the toggle isnt
+                                # self.send_message_to_all_numbers(gas_status)
+                                print "Would have called. Flag=" + str(self.gas_detected)
+                                self.gas_detected = True
+                                print "Now the flag is..." + str(self.gas_detected)
 
                             # Force the heater off command no matter
                             # what we think the status is.
                             self.heater_relay.switch_low()
-
-                        if gas_sensor_status == GAS_OK:
-                            if gas_detected:
+                        elif GAS_OK in gas_sensor_status:
+                            if self.gas_detected:
                                 gas_status = "Gas warning cleared with Level=" + str(self.mq2_sensor.current_value)
                                 self.log_warning_message(gas_status)
                                 self.send_message_to_all_numbers(gas_status)
-                                gas_detected = False
+                                print "Flag goes off"
+                                self.gas_detected = False
 
                 except Queue.Empty:
                     pass

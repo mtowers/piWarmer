@@ -26,24 +26,24 @@ class GasSensor(object):
         self.sensor_trigger_threshold = sensor_trigger_threshold
         self.sensor_all_clear_threshold = sensor_all_clear_threshold
 
-    def read(self):
+    def read(self, read_offset=DEFAULT_CHANNEL_READ_OFFSET):
         """
         Read from the ic2 device.
         """
         self.ic2_bus.write_byte(DEFAULT_IC2_ADDRESS,
-                                DEFAULT_CHANNEL_READ_OFFSET)
+                                read_offset)
 
         return self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
 
-    def update(self):
+    def update(self, read_offset=DEFAULT_CHANNEL_READ_OFFSET):
         """
         Attempts to look for gas.
         """
 
-        self.current_value = self.read()
+        self.current_value = self.read(read_offset)
 
         if self.is_gas_detected:
-            self.is_gas_detected =self.current_value <= self.sensor_all_clear_threshold
+            self.is_gas_detected = self.current_value <= self.sensor_all_clear_threshold
 
         self.is_gas_detected |= self.current_value >= self.sensor_trigger_threshold
 
@@ -54,6 +54,9 @@ if __name__ == '__main__':
     sensor = GasSensor()
 
     while True:
-        print str(sensor.read())
-        print str(sensor.update())
+        print "------------"
+        offsets = [0, 10, 20, 30, 40, 50, 60, 70 ,80, 90]
+        for offset in offsets:
+            print str(offset) + ":" +str(sensor.read(offset))
+            # print str(sensor.update(offset))
         time.sleep(1)
