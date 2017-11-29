@@ -2,6 +2,7 @@
 import time
 import subprocess
 import Queue
+import threading
 from multiprocessing import Queue as MPQueue
 from multiprocessing import Process
 import serial  # Requires "pyserial"
@@ -15,6 +16,8 @@ import lib.temp_probe as temp_probe
 OFF = "Off"
 ON = "On"
 MAX_TIME = "MAX_TIME"
+GAS_WARNING = "gas_warning"
+GAS_OK = "no_warning"
 
 
 class RelayController(object):
@@ -30,38 +33,107 @@ class RelayController(object):
         num_deleted = self.fona.delete_messages(False)
         if num_deleted > 0:
             for phone_number in self.configuration.allowed_phone_numbers:
-                self.fona.send_message(phone_number,
+                self.send_message(phone_number,
                                        "Old or unprocessed message(s) found on SIM Card."
                                        + " Deleting...")
             self.log_info_message(
                 str(num_deleted) + " old message cleared from SIM Card")
 
-    def __start_gas_sensor__(self):
-        """ Starts the gas sensor. Returns TRUE if gas is detected.
-        Sends an alert if gas is detected. """
+    def __get_gas_sensor_status__(self):
+        """
+        Returns the status text for the gas sensor.
+        """
 
-        initialization_message = ""
-        try:
-            self.mq2_sensor = gas_sensor.GasSensor()
-        except:
-            self.mq2_sensor = None
+        if self.mq2_sensor is None or not self.configuration.is_mq2_enabled:
+            return "Gas sensor NOT enabled."
 
-        is_detected = self.is_gas_detected()
+        gas_detected = self.mq2_sensor.update()
+        status_text = "MQ2 sensor enabled, reading " + str(self.mq2_sensor.current_value)
 
-        if self.configuration.is_mq2_enabled:
-            initialization_message += "MQ2 sensor detected and enabled."
-
-            if is_detected:
-                initialization_message += " GAS DETECTED!"
+        if gas_detected:
+            status_text += ". DANGER! GAS DETECTED!"
         else:
-            initialization_message += "Starting without MQ2 enabled."
+            status_text += ". Environment OK."
 
-        self.send_message_to_all_numbers(initialization_message)
+        return status_text
 
-        return is_detected
+    def __get_temp_probe_status__(self):
+        """
+        Returns the status of the temperature probe.
+        """
+
+        if self.configuration.is_temp_probe_enabled:
+            sensor_readings = temp_probe.read_sensors()
+            if sensor_readings is None or len(sensor_readings) < 1:
+                return "Temp probe enabled, but not found."
+            else:
+                return "Temperature is " + str(sensor_readings[0]) + "F"
+
+        return "Temp probe not enabled."
+
+    def __get_heater_status__(self):
+        """
+        Returns the status of the heater/relay.
+        """
+        if self.heater_relay is None:
+            return "Relay not detected."
+
+        status_text = "Heater is "
+
+        if self.heater_relay.get_status() == 1:
+            status_text += "ON"
+        else:
+            status_text += "OFF"
+
+        status_text += "."
+
+        return status_text
+
+    def __get_fona_status__(self):
+        """
+        Returns the status of the Fona.
+        ... both the signal and battery ...
+        """
+        if self.fona is None:
+            return "Fona not found."
+
+        cbc = self.fona.get_current_battery_condition()
+        signal = self.fona.get_signal_strength()
+
+        status = "Cell signal is " + signal.classify_strength() + ", battery at " + str(cbc.battery_percent) + "%, "
+
+        if cbc.is_battery_ok():
+            status += "OK."
+        else:
+            status += "LOW BATTERY."
+
+        return status
+            
+
+    def __get_status__(self):
+        """
+        Returns the status of the piWarmer.
+        """
+
+        status = self.__get_heater_status__() + "\n" + self.__get_gas_sensor_status__() + "\n"
+        status += self.__get_temp_probe_status__() + "\n" + self.__get_fona_status__()
+
+        return status
+
+    def __start_gas_sensor__(self):
+        """
+        Initializes the gas sensor.
+        """
+
+        try:
+            return gas_sensor.GasSensor()
+        except:
+            return None
+
 
     def __init__(self, configuration, logger):
         """ Initialize the object. """
+        self.ready_for_service = False
         self.configuration = configuration
         self.logger = logger
         self.last_number = None
@@ -73,22 +145,17 @@ class RelayController(object):
         self.fona = Fona.Fona("fona", serial_connection,
                               self.configuration.allowed_phone_numbers)
 
-        self.mq2_sensor = None
-        if self.configuration.is_temp_probe_enabled:
-            temp_message = "Temp sensor enabled and reporting " + \
-                str(temp_probe.read_sensors()[0]) + "F"
-            self.send_message_to_all_numbers(temp_message)
-
         # create heater relay instance
         self.heater_relay = PowerRelay(
             "heater_relay", configuration.heater_gpio_pin)
         self.heater_queue = MPQueue()
 
         # create queue to hold heater timer.
-        self.gas_sensor_queue = self.start_monitoring_gas_sensor()
+        self.mq2_sensor = self.__start_gas_sensor__()
 
-        self.shutoff_timer_process = Process(target=self.start_heater_shutoff_timer,
-                                             args=())
+        self.log_info_message("Starting shutoff_timer_process in __init__")
+        self.shutoff_timer_process = None
+        self.start_heater_timer()
 
         if self.fona is None:
             self.log_warning_message("Uable to initialize, quiting.")
@@ -97,15 +164,41 @@ class RelayController(object):
         # make sure and turn heater off
         self.heater_relay.switch_low()
         self.log_info_message("Starting SMS monitoring and heater service")
-        self.send_message_to_all_numbers(
-            "piWarmer powered on. Initializing. Wait to send messages...")
         self.__clear_existing_messages__()
-        self.__start_gas_sensor__()
 
         self.log_info_message("Begin monitoring for SMS messages")
-        self.send_message_to_all_numbers(
-            "piWarmer monitoring started. Ok to send messages now."
-            + " Text ON,OFF,STATUS or SHUTDOWN to control heater")
+        self.send_message_to_all_numbers("piWarmer monitoring started."
+                                          + "\n" + self.__get_help_status__())
+        self.send_message_to_all_numbers(self.__get_status__())
+
+        if not self.start_monitoring_gas_sensor():
+            gas_disabled = "Unable to initialize gas sensor or thread. Disabling."
+            self.log_warning_message(gas_disabled)
+            self.send_message_to_all_numbers(gas_disabled)
+            self.mq2_sensor = None
+
+        self.ready_for_service = True
+
+    def __get_help_status__(self):
+        """
+        Returns the message for help.
+        """
+        return "To control the piWarmer text ON, OFF, STATUS, HELP, or SHUTDOWN"
+
+    def send_message(self, phone_number, message):
+        """
+        Sends a message to the given phone number.
+        """
+        try:
+            if self.fona is not None:
+                self.log_info_message(phone_number + ":" + message)
+                if self.configuration.test_mode is None or not self.configuration.test_mode:
+                    self.fona.send_message(phone_number, message)
+                return True
+        except:
+            self.log_warning_message("Error while attemting to send message.")
+
+        return False
 
     def send_message_to_all_numbers(self, message):
         """ Sends a message to ALL of the numbers in the configuration. """
@@ -115,25 +208,25 @@ class RelayController(object):
         self.log_info_message("Sending messages to all: " + message)
 
         for phone_number in self.configuration.allowed_phone_numbers:
-            self.fona.send_message(phone_number, message)
-
+            self.send_message(phone_number, message)
+        
         if (self.configuration.push_notification_number
                 not in self.configuration.allowed_phone_numbers):
-            self.fona.send_message(
+            self.send_message(
                 self.configuration.push_notification_number, message)
 
         return True
 
     def log_info_message(self, message_to_log):
         """ Log and print at Info level """
-        print message_to_log
+        print "LOG:" + message_to_log.replace("\n", "\\n").replace("\r", "\\r")
         self.logger.info(message_to_log)
 
         return message_to_log
 
     def log_warning_message(self, message_to_log):
         """ Log and print at Warning level """
-        print message_to_log
+        print "WARN:" + message_to_log
         self.logger.warning(message_to_log)
 
         return message_to_log
@@ -174,7 +267,11 @@ class RelayController(object):
         if phone_number is None:
             return False
 
-        return phone_number in self.configuration.allowed_phone_numbers
+        for allowed_number in self.configuration.allowed_phone_numbers:
+            self.log_info_message("Checking " + phone_number + " against " + allowed_number)
+            # Handle phone numbers that start with "1"... sometimes
+            if allowed_number in phone_number or phone_number in allowed_number:
+                return True
 
     def handle_on_request(self, status, phone_number):
         """ Handle a request to turn on. """
@@ -184,7 +281,7 @@ class RelayController(object):
 
         self.log_info_message("Received ON request from " + phone_number)
 
-        if status == "1":
+        if status == 1:
             return CommandResponse.CommandResponse(CommandResponse.NOOP,
                                                    "Heater is already ON")
 
@@ -202,7 +299,7 @@ class RelayController(object):
 
         self.log_info_message("Received OFF request from " + phone_number)
 
-        if status == "1":
+        if status == 1:
             try:
                 self.heater_relay.switch_low()
                 self.heater_queue.put(OFF)
@@ -216,20 +313,22 @@ class RelayController(object):
                                                "Heater is already OFF")
 
     def handle_status_request(self, status, phone_number):
-        """ Handle a status request. """
+        """
+        Handle a status request.
+        """
         self.log_info_message(
             "Received STATUS request from " + phone_number)
 
-        if status == "1":
-            message_response = "Heater is ON"
-        elif status == "0":
-            message_response = "Heater is OFF"
+        return CommandResponse.CommandResponse(CommandResponse.STATUS, self.__get_status__())
 
-        if self.is_gas_detected():
-            message_response += ". GAS DETECTED"
+    def handle_help_request(self, status, phone_number):
+        """
+        Handle a help request.
+        """
+        self.log_info_message(
+            "Received HELP request from " + phone_number)
 
-        # $TODO - Add GAS & TEMP status into response
-        return CommandResponse.CommandResponse(CommandResponse.STATUS, message_response)
+        return CommandResponse.CommandResponse(CommandResponse.STATUS, self.__get_help_status__())
 
     def get_command_response(self, message, status, phone_number):
         """ returns a command response based on the message. """
@@ -239,6 +338,8 @@ class RelayController(object):
             return self.handle_off_request(status, phone_number)
         elif "status" in message:
             return self.handle_status_request(status, phone_number)
+        elif "help" in message:
+            return self.handle_help_request(status, phone_number)
         elif "shutdown" in message:
             return CommandResponse.CommandResponse(CommandResponse.PI_WARMER_OFF,
                                                    "Received SHUTDOWN request from " + phone_number)
@@ -279,7 +380,9 @@ class RelayController(object):
                     "Issue turning on Heater")
 
     def process_message(self, message, phone_number=False):
-        """ Process a SMS message/command. """
+        """
+        Process a SMS message/command.
+        """
 
         status = self.heater_relay.get_status()
         message = message.lower()
@@ -290,7 +393,7 @@ class RelayController(object):
         # check to see if this is an allowed phone number
         if not self.is_allowed_phone_number(phone_number):
             unauth_message = "Received unauthorized SMS from " + phone_number
-            self.fona.send_message(
+            self.send_message(
                 self.push_notification_number, unauth_message)
             return self.log_warning_message(unauth_message)
 
@@ -302,7 +405,7 @@ class RelayController(object):
             self.last_number = phone_number
 
         if phone_number is not None:
-            self.fona.send_message(
+            self.send_message(
                 phone_number, command_response.get_message())
             self.log_info_message(
                 "Sent message: " + command_response.get_message() + " to " + phone_number)
@@ -313,45 +416,79 @@ class RelayController(object):
         return command_response.get_message()
 
     def shutdown(self):
-        """ Shuts down the Pi """
-        self.shutoff_timer_process = subprocess.Popen(["sudo shutdown -P now "
-                                                       + str(self.configuration.heater_gpio_pin)],
-                                                      shell=True, stdout=subprocess.PIPE,
-                                                      stderr=subprocess.STDOUT)
+        """
+        Shuts down the Pi
+        """
+        self.log_info_message("Assigning shutdown_timer_process in shutdown()")
+        self.heater_relay.switch_low()
+        subprocess.Popen(["sudo shutdown -P now " + str(self.configuration.heater_gpio_pin)],
+                         shell=True, stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT)
 
     # for safety, this thread starts a timer for when the heater was turned on
     # and turns it off when reached
     def start_heater_shutoff_timer(self):
-        """ Starts a timer to turn off the heater. """
+        """
+        Starts a timer to turn off the heater.
+        """
         self.log_info_message("Starting Heater Timer. Max Time is " +
                               str(self.configuration.max_minutes_to_run) + " minutes")
         time.sleep(self.configuration.max_minutes_to_run * 60)
         self.heater_queue.put(MAX_TIME)
         return
 
+    def clear_queue(self, queue):
+        """
+        Clears a given queue.
+        """
+        if queue is None:
+            return False;
+
+        while not queue.empty():
+            print "cleared message from queue."
+            queue.get()
+
     def monitor_gas_sensor(self):
-        """ Monitor the Gas Sensors. Sends a warning message if gas is detected. """
+        """
+        Monitor the Gas Sensors. Sends a warning message if gas is detected.
+        """
+
+        self.log_info_message("Starting gas sensor loop.")
+
         while True:
             detected = self.is_gas_detected()
+            current_level = self.mq2_sensor.current_value
 
-            # print LED_status
-            if detected and self.heater_relay.get_status() == "1":
-                # clear the queue if it has a bunch of no warnings in it
-                while not self.gas_sensor_queue.empty():
-                    self.gas_sensor_queue.get()
-                self.gas_sensor_queue.put("gas_warning")
+            print "Detected: " + str(detected) + ", Level=" + str(current_level)
+
+            # If gas is detected, send an immediate warning to
+            # all of the phone numberss
+            if detected:
+                self.clear_queue(self.gas_sensor_queue)
+
+                status = "WARNING!! GAS DETECTED!!! Level = " + str(current_level)
+            
+                if self.heater_relay.get_status() == 1:
+                    status += ", TURNING HEATER OFF."
+                    # clear the queue if it has a bunch of no warnings in it
+
+                self.log_warning_message(status)
+                print "Shoving command into queue"
+                self.gas_sensor_queue.put(GAS_WARNING)
                 self.heater_queue.put(OFF)
                 self.heater_relay.switch_low()
 
-                self.fona.send_message(
-                    self.push_notification_number, "GAS DETECTED")
                 time.sleep(60)
             else:
-                self.gas_sensor_queue.put("no_warning")
+                print "Sending OK into queue"
+                self.gas_sensor_queue.put(GAS_OK)
+
             time.sleep(2)
 
     def initialize_modem(self, retries=4, seconds_between_retries=10):
-        """ Attempts to initialize the modem over the serial port. """
+        """
+        Attempts to initialize the modem over the serial port.
+        """
 
         serial_connection = None
 
@@ -379,50 +516,98 @@ class RelayController(object):
         return serial_connection
 
     def start_monitoring_gas_sensor(self):
-        """ Initializes and enables the MQ2 Gas Sensor """
+        """
+        Initializes and enables the MQ2 Gas Sensor
+        """
+        self.gas_sensor_queue = MPQueue()
+
         if self.configuration.is_mq2_enabled:
             self.log_info_message("MQ2 Gas Sensor enabled")
             # setup MQ2 GPIO PINS
             # create queue to hold MQ2 LED status
-            mq2_queue = MPQueue()
             # start sub process to monitor actual MQ2 sensor
-            Process(target=self.monitor_gas_sensor, args=()).start()
+            gas_sensor_process = Process(target = self.monitor_gas_sensor)
 
-            self.heater_queue.put(OFF)
+            if gas_sensor_process is None:
+                self.log_warning_message("Failed to create gas sensor thread.")
+                exit()
 
-            return mq2_queue
+            gas_sensor_process.start()
+
+            return True
         else:
             self.log_info_message("MQ2 Sensor not enabled")
 
-        return None
+        return False
+
+    def start_heater_timer(self):
+        self.log_info_message("Attempting to start heater shutoff timer.")
+        if self.shutoff_timer_process is not None:
+            self.log_warning_message("Turn off process already existed. Stopping.")
+            self.shutoff_timer_process.terminate()
+        self.shutoff_timer_process = Process(target = self.start_heater_shutoff_timer)
+        if self.shutoff_timer_process is None:
+            self.log_warning_message("FAILED to create shutoff timer.")
+
+            return False
+
+        try:
+            self.shutoff_timer_process.start()
+            self.log_info_message("Shutoff timer created")
+
+            return True
+        except:
+            self.log_warning_message("Error trying to start the shutoff timer!")
+
+        return False
 
     def run_pi_warmer(self):
-        """ Service loop to run the PiWarmer """
+        """
+        Service loop to run the PiWarmer
+        """
         self.log_info_message('Press Ctrl-C to quit.')
         flag = 0
 
-        while True:
-            if self.configuration.is_mq2_enabled and not self.gas_sensor_queue is None:
-                try:
-                    gas_sensor_status = self.gas_sensor_queue.get_nowait()
+        while not self.ready_for_service:
+            print "."
+            time.sleep(1)
 
-                    # print "QUEUE: " + myLEDqstatus
-                    if "gas_warning" in gas_sensor_status:
-                        if flag == 0:
-                            flag = 1
-                            self.log_warning_message(
-                                "GAS DETECTED.HEATER TURNED OFF")
-                            # heater.switchLow()
-                            self.fona.send_message(
-                                self.push_notification_number(), "Gas Warning. Heater turned OFF")
-                            flag = 1
-                    if gas_sensor_status == "no_warning":
-                        if flag == 1:
-                            self.log_warning_message("GAS WARNING CLEARED")
-                            self.fona.send_message(
-                                self.push_notification_number(),
-                                "Gas Warning CLEARED. Send ON message to restart")
-                            flag = 0
+        while True:
+            gas_detected = False
+
+            if self.configuration.is_mq2_enabled:
+                try:
+                    while not self.gas_sensor_queue.empty():
+                        gas_sensor_status = self.gas_sensor_queue.get_nowait()
+
+                        if gas_sensor_status is None:
+                            print "Nope"
+                        else:
+                            print "Q:" + gas_sensor_status
+
+                        # print "QUEUE: " + myLEDqstatus
+                        if GAS_WARNING in gas_sensor_status:
+                            if not gas_detected:
+                                gas_status = "GAS DETECTED. Level=" + str(self.mq2_sensor.current_value)
+
+                                if self.heater_relay.get_status() == 1:
+                                    gas_status += "SHUTTING HEATER DOWN"
+                        
+                                self.log_warning_message(gas_status)
+                                gas_detected = True
+
+                                self.send_message_to_all_numbers(gas_status)
+
+                            # Force the heater off command no matter
+                            # what we think the status is.
+                            self.heater_relay.switch_low()
+
+                        if gas_sensor_status == GAS_OK:
+                            if gas_detected:
+                                gas_status = "Gas warning cleared with Level=" + str(self.mq2_sensor.current_value)
+                                self.log_warning_message(gas_status)
+                                self.send_message_to_all_numbers(gas_status)
+                                gas_detected = False
 
                 except Queue.Empty:
                     pass
@@ -433,26 +618,39 @@ class RelayController(object):
                 status_queue = self.heater_queue.get_nowait()
 
                 if ON in status_queue:
-                    self.shutoff_timer_process = Process(
-                        target=self.start_heater_shutoff_timer, args=())
-                    self.shutoff_timer_process.start()
+                    self.log_info_message("Creating shutoff_timer_process for ON queue event.")
+                    self.start_heater_timer()
+                    self.log_info_message("Starting shutoff_timer_process for ON event.")
                 if OFF in status_queue:
-                    self.shutoff_timer_process.terminate()
+                    self.log_info_message("Attempting to handle OFF queue event.")
+                    if self.shutoff_timer_process is not None:
+                        self.shutoff_timer_process.terminate()
+                    else:
+                        self.log_warning_message("self.shutoff_timer_process was None in queue handler.")
                 if MAX_TIME in status_queue:
                     self.log_info_message(
                         "Max time reached. Heater turned OFF")
                     self.heater_relay.switch_low()
-                    self.fona.send_message(
+                    self.send_message(
                         self.push_notification_number(),
                         "Heater was turned off due to max time being reached")
             except Queue.Empty:
                 pass
+
             # get messages on SIM Card
             messages = self.fona.get_messages()
-            for message in messages:
-                response = self.process_message(
-                    message.message_text, message.sender_number)
-                self.log_info_message(response)
+            total_message_count = len(messages)
+
+            if total_message_count > 0:
+                message_count = 0
+                for message in messages:
+                    message_count += 1
+                    self.fona.delete_message(message)
+                    response = self.process_message(
+                        message.message_text, message.sender_number)
+                    self.log_info_message(response)
+
+                self.log_info_message("Found " + str(total_message_count) + " messages, processed " + str(message_count))
 
 
 #############
@@ -471,3 +669,4 @@ if __name__ == '__main__':
     CONTROLLER = RelayController(CONFIG, logging.getLogger("Controller"))
 
     print "Tests finished"
+    exit()

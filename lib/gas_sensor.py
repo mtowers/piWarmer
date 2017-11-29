@@ -40,12 +40,12 @@ class GasSensor(object):
         Attempts to look for gas.
         """
 
-        current_value = self.read()
+        self.current_value = self.read()
 
         if self.is_gas_detected:
-            self.is_gas_detected = current_value <= self.sensor_all_clear_threshold
+            self.is_gas_detected =self.current_value <= self.sensor_all_clear_threshold
 
-        self.is_gas_detected |= current_value >= self.sensor_trigger_threshold
+        self.is_gas_detected |= self.current_value >= self.sensor_trigger_threshold
 
         return self.is_gas_detected
 

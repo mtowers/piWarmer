@@ -64,6 +64,12 @@ class PiWarmerConfiguration(object):
             'SETTINGS', 'MAX_HEATER_TIME')
         self.log_filename = self.get_log_filename()
 
+        try:
+            self.test_mode = self.__config_parser__.getboolean(
+                'SETTINGS', 'TEST_MODE')
+        except:
+            self.test_mode = False
+
 
 ##################
 ### UNIT TESTS ###

@@ -26,6 +26,7 @@ class PowerRelay(object):
         self.name = name
         self.gpio_pin = GPIO_PIN
         self.type = relay_type
+        self.expected_status = GPIO.LOW
         # setup GPIO Pins
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
@@ -37,6 +38,7 @@ class PowerRelay(object):
         """
         try:
             GPIO.output(self.gpio_pin, GPIO.HIGH)
+            self.expected_status = GPIO.HIGH
             time.sleep(3)
         except:
             return False
@@ -48,6 +50,7 @@ class PowerRelay(object):
         """
         try:
             GPIO.output(self.gpio_pin, GPIO.LOW)
+            self.expected_status = GPIO.LOW
             time.sleep(3)
         except:
             return False
@@ -65,9 +68,9 @@ class PowerRelay(object):
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.STDOUT)
             message = read_process.communicate(input)
-            return message[0].rstrip()
+            return int(message[0].rstrip())
         except:
-            return False
+            return 0
 
 
 ##############

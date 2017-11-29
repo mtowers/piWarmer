@@ -1,4 +1,8 @@
-""" Module to help with tha AdaFruit Fona modules """
+"""
+Module to help with tha AdaFruit Fona modules
+"""
+# TODO - Need to wire the GPIO to the Fona to turn itself on
+# TODO - Could wire to the fona for a status/waiting bit
 import time
 
 SECONDS_TO_WAIT_AFTER_SEND = 5
@@ -31,12 +35,14 @@ def get_cleaned_phone_number(dirty_number):
     '2061234567'
     >>> get_cleaned_phone_number(None)
     """
-    if PHONE_NUMBER:
+    if dirty_number is not None:
         return dirty_number.replace('+',
                                     '').replace('(',
                                                 '').replace(')',
                                                             '').replace('-',
-                                                                        '').replace(' ', '')
+                                                                        '').replace(' ',
+                                                                                    '').replace('"',
+                                                                                                '')
     return None
 
 
@@ -44,12 +50,6 @@ class BatteryCondition(object):
     """
     Class to keep the battery state.
     """
-
-    def is_error_state(self):
-        """
-        Were the results usable or in error?
-        """
-        return self.is_error_state
 
     def get_percent_battery(self):
         """
@@ -67,7 +67,7 @@ class BatteryCondition(object):
         """
         Is the battery OK?
         """
-        if self.is_error_state():
+        if self.error_state:
             return False
 
         return self.battery_percent > BATTERY_CRITICAL
@@ -84,12 +84,13 @@ class BatteryCondition(object):
             tokens = command_result.split(':')
 
             if tokens is None or len(tokens) <= 1:
+                print "Error attempting to process: " + command_result
                 self.error_state = True
+            else:
+                results = tokens[1].split(',')
 
-            results = tokens[1].split(',')
-
-            if results is None or len(results) <= 2:
-                self.error_state = True
+                if results is None or len(results) <= 2:
+                    self.error_state = True
 
         if not self.error_state:
             self.charge_state = float(results[0])
@@ -354,13 +355,15 @@ class Fona(object):
         """
         Returns an object representing the current battery state.
         """
+        print "Sending CBC command"
+        time.sleep(5)
         command_result = self.send_command("AT+CBC")
-        if command_result is None or len(command_result) < 2:
-            command_result = None
-        else:
-            command_result = command_result[1]
 
-        return BatteryCondition(command_result)
+        for result in command_result:
+            if "CBC:" in result:
+                return BatteryCondition(result)
+
+        return BatteryCondition(None)
 
     def get_module_name(self):
         """
@@ -478,22 +481,26 @@ class Fona(object):
                 time.sleep(1)
         return messages
 
+    def delete_message(self, message_to_delete, confirmation=True):
+        """
+        Deletes a message with the given Id.
+        """
+        self.send_command("AT+CMGD=" + str(message_to_delete.message_id))
+
+        if confirmation is True:
+            conf_number = get_cleaned_phone_number(message_to_delete.sender_number)
+
+            if conf_number in self.allowednumbers:
+                self.send_message(conf_number,
+                    "Message received: " + message_to_delete.message_text)
+
     def delete_messages(self, confirmation=True):
         """ Deletes any messages. """
         messages = self.get_messages()
         messages_deleted = 0
         for message_to_delete in messages:
             messages_deleted += 1
-            self.send_command("AT+CMGD=" + str(message_to_delete.message_id))
-
-            if confirmation is True:
-                conf_number = get_cleaned_phone_number(
-                    message_to_delete.sender_number)
-
-                if conf_number in self.allowednumbers:
-                    self.send_message(
-                        conf_number,
-                        "Message Received: " + message_to_delete.message_text)
+            self.delete_message(message_to_delete, confirmation)
 
         return messages_deleted
 
@@ -505,9 +512,9 @@ if __name__ == '__main__':
                 {PHONE_NUMBER, '18558655971'})
     # fona.get_carrier()
     BATTERY_CONDITION = FONA.get_current_battery_condition()
-    # fona.send_message(phone_number, "Time:" + str(time.time())
-    #                                + ", PCT:" + str(battery_condition.battery_percent)
-    #                                + ", mAH:" + str(battery_condition.milliamp_hours))
+    FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time())
+                                    + "\nPCT:" + str(BATTERY_CONDITION.battery_percent)
+                                    + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
     # print "Signal strength:"
     SIGNAL_STRENGTH = FONA.get_signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
@@ -522,5 +529,6 @@ if __name__ == '__main__':
         print "Num:" + message.sender_number
         print "Stat:" + message.message_status
         print "SMS:" + message.message_text
+
 
     # fona.get_messages(False)
