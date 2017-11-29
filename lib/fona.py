@@ -488,11 +488,12 @@ class Fona(object):
         self.send_command("AT+CMGD=" + str(message_to_delete.message_id))
 
         if confirmation is True:
-            conf_number = get_cleaned_phone_number(message_to_delete.sender_number)
+            conf_number = get_cleaned_phone_number(
+                message_to_delete.sender_number)
 
             if conf_number in self.allowednumbers:
                 self.send_message(conf_number,
-                    "Message received: " + message_to_delete.message_text)
+                                  "Message received: " + message_to_delete.message_text)
 
     def delete_messages(self, confirmation=True):
         """ Deletes any messages. """
@@ -512,9 +513,9 @@ if __name__ == '__main__':
                 {PHONE_NUMBER, '18558655971'})
     # fona.get_carrier()
     BATTERY_CONDITION = FONA.get_current_battery_condition()
-    FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time())
-                                    + "\nPCT:" + str(BATTERY_CONDITION.battery_percent)
-                                    + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
+    FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
+                      str(BATTERY_CONDITION.battery_percent)
+                      + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
     # print "Signal strength:"
     SIGNAL_STRENGTH = FONA.get_signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
@@ -529,6 +530,5 @@ if __name__ == '__main__':
         print "Num:" + message.sender_number
         print "Stat:" + message.message_status
         print "SMS:" + message.message_text
-
 
     # fona.get_messages(False)

@@ -2,7 +2,6 @@
 import time
 import subprocess
 import Queue
-import threading
 from multiprocessing import Queue as MPQueue
 from multiprocessing import Process
 import serial  # Requires "pyserial"
@@ -34,8 +33,8 @@ class RelayController(object):
         if num_deleted > 0:
             for phone_number in self.configuration.allowed_phone_numbers:
                 self.send_message(phone_number,
-                                       "Old or unprocessed message(s) found on SIM Card."
-                                       + " Deleting...")
+                                  "Old or unprocessed message(s) found on SIM Card."
+                                  + " Deleting...")
             self.log_info_message(
                 str(num_deleted) + " old message cleared from SIM Card")
 
@@ -48,7 +47,8 @@ class RelayController(object):
             return "Gas sensor NOT enabled."
 
         gas_detected = self.mq2_sensor.update()
-        status_text = "MQ2 sensor enabled, reading " + str(self.mq2_sensor.current_value)
+        status_text = "MQ2 sensor enabled, reading " + \
+            str(self.mq2_sensor.current_value)
 
         if gas_detected:
             status_text += ". DANGER! GAS DETECTED!"
@@ -66,8 +66,8 @@ class RelayController(object):
             sensor_readings = temp_probe.read_sensors()
             if sensor_readings is None or len(sensor_readings) < 1:
                 return "Temp probe enabled, but not found."
-            else:
-                return "Temperature is " + str(sensor_readings[0]) + "F"
+
+            return "Temperature is " + str(sensor_readings[0]) + "F"
 
         return "Temp probe not enabled."
 
@@ -100,7 +100,8 @@ class RelayController(object):
         cbc = self.fona.get_current_battery_condition()
         signal = self.fona.get_signal_strength()
 
-        status = "Cell signal is " + signal.classify_strength() + ", battery at " + str(cbc.battery_percent) + "%, "
+        status = "Cell signal is " + signal.classify_strength() + ", battery at " + \
+            str(cbc.battery_percent) + "%, "
 
         if cbc.is_battery_ok():
             status += "OK."
@@ -108,7 +109,6 @@ class RelayController(object):
             status += "LOW BATTERY."
 
         return status
-            
 
     def __get_status__(self):
         """
@@ -130,13 +130,13 @@ class RelayController(object):
         except:
             return None
 
-
     def __init__(self, configuration, logger):
         """ Initialize the object. """
         self.ready_for_service = False
         self.configuration = configuration
         self.logger = logger
         self.last_number = None
+        self.gas_detected = False
         serial_connection = self.initialize_modem()
         if serial_connection is None:
             print "Nope"
@@ -168,7 +168,7 @@ class RelayController(object):
 
         self.log_info_message("Begin monitoring for SMS messages")
         self.send_message_to_all_numbers("piWarmer monitoring started."
-                                          + "\n" + self.__get_help_status__())
+                                         + "\n" + self.__get_help_status__())
         self.send_message_to_all_numbers(self.__get_status__())
 
         if not self.start_monitoring_gas_sensor():
@@ -209,7 +209,7 @@ class RelayController(object):
 
         for phone_number in self.configuration.allowed_phone_numbers:
             self.send_message(phone_number, message)
-        
+
         if (self.configuration.push_notification_number
                 not in self.configuration.allowed_phone_numbers):
             self.send_message(
@@ -268,12 +268,13 @@ class RelayController(object):
             return False
 
         for allowed_number in self.configuration.allowed_phone_numbers:
-            self.log_info_message("Checking " + phone_number + " against " + allowed_number)
+            self.log_info_message(
+                "Checking " + phone_number + " against " + allowed_number)
             # Handle phone numbers that start with "1"... sometimes
             if allowed_number in phone_number or phone_number in allowed_number:
                 return True
 
-    def handle_on_request(self, status, phone_number):
+    def handle_on_request(self, phone_number):
         """ Handle a request to turn on. """
 
         if phone_number is None:
@@ -281,7 +282,7 @@ class RelayController(object):
 
         self.log_info_message("Received ON request from " + phone_number)
 
-        if status == 1:
+        if self.heater_relay.get_status() == 1:
             return CommandResponse.CommandResponse(CommandResponse.NOOP,
                                                    "Heater is already ON")
 
@@ -294,12 +295,12 @@ class RelayController(object):
                                                + str(self.configuration.max_minutes_to_run)
                                                + " minutes.")
 
-    def handle_off_request(self, status, phone_number):
+    def handle_off_request(self, phone_number):
         """ Handle a request to turn off. """
 
         self.log_info_message("Received OFF request from " + phone_number)
 
-        if status == 1:
+        if self.heater_relay.get_status() == 1:
             try:
                 self.heater_relay.switch_low()
                 self.heater_queue.put(OFF)
@@ -312,7 +313,7 @@ class RelayController(object):
         return CommandResponse.CommandResponse(CommandResponse.NOOP,
                                                "Heater is already OFF")
 
-    def handle_status_request(self, status, phone_number):
+    def handle_status_request(self, phone_number):
         """
         Handle a status request.
         """
@@ -321,7 +322,7 @@ class RelayController(object):
 
         return CommandResponse.CommandResponse(CommandResponse.STATUS, self.__get_status__())
 
-    def handle_help_request(self, status, phone_number):
+    def handle_help_request(self, phone_number):
         """
         Handle a help request.
         """
@@ -330,16 +331,16 @@ class RelayController(object):
 
         return CommandResponse.CommandResponse(CommandResponse.STATUS, self.__get_help_status__())
 
-    def get_command_response(self, message, status, phone_number):
+    def get_command_response(self, message, phone_number):
         """ returns a command response based on the message. """
         if "on" in message:
-            return self.handle_on_request(status, phone_number)
+            return self.handle_on_request(phone_number)
         elif "off" in message:
-            return self.handle_off_request(status, phone_number)
+            return self.handle_off_request(phone_number)
         elif "status" in message:
-            return self.handle_status_request(status, phone_number)
+            return self.handle_status_request(phone_number)
         elif "help" in message:
-            return self.handle_help_request(status, phone_number)
+            return self.handle_help_request(phone_number)
         elif "shutdown" in message:
             return CommandResponse.CommandResponse(CommandResponse.PI_WARMER_OFF,
                                                    "Received SHUTDOWN request from " + phone_number)
@@ -384,7 +385,6 @@ class RelayController(object):
         Process a SMS message/command.
         """
 
-        status = self.heater_relay.get_status()
         message = message.lower()
         self.log_info_message("Processing message:" + message)
 
@@ -398,7 +398,7 @@ class RelayController(object):
             return self.log_warning_message(unauth_message)
 
         command_response = self.get_command_response(
-            message, status, phone_number)
+            message, phone_number)
         self.execute_command(command_response)
 
         if phone_number:
@@ -442,7 +442,7 @@ class RelayController(object):
         Clears a given queue.
         """
         if queue is None:
-            return False;
+            return False
 
         while not queue.empty():
             print "cleared message from queue."
@@ -466,8 +466,9 @@ class RelayController(object):
             if detected:
                 self.clear_queue(self.gas_sensor_queue)
 
-                status = "WARNING!! GAS DETECTED!!! Level = " + str(current_level)
-            
+                status = "WARNING!! GAS DETECTED!!! Level = " + \
+                    str(current_level)
+
                 if self.heater_relay.get_status() == 1:
                     status += ", TURNING HEATER OFF."
                     # clear the queue if it has a bunch of no warnings in it
@@ -526,7 +527,7 @@ class RelayController(object):
             # setup MQ2 GPIO PINS
             # create queue to hold MQ2 LED status
             # start sub process to monitor actual MQ2 sensor
-            gas_sensor_process = Process(target = self.monitor_gas_sensor)
+            gas_sensor_process = Process(target=self.monitor_gas_sensor)
 
             if gas_sensor_process is None:
                 self.log_warning_message("Failed to create gas sensor thread.")
@@ -543,9 +544,11 @@ class RelayController(object):
     def start_heater_timer(self):
         self.log_info_message("Attempting to start heater shutoff timer.")
         if self.shutoff_timer_process is not None:
-            self.log_warning_message("Turn off process already existed. Stopping.")
+            self.log_warning_message(
+                "Turn off process already existed. Stopping.")
             self.shutoff_timer_process.terminate()
-        self.shutoff_timer_process = Process(target = self.start_heater_shutoff_timer)
+        self.shutoff_timer_process = Process(
+            target=self.start_heater_shutoff_timer)
         if self.shutoff_timer_process is None:
             self.log_warning_message("FAILED to create shutoff timer.")
 
@@ -557,7 +560,8 @@ class RelayController(object):
 
             return True
         except:
-            self.log_warning_message("Error trying to start the shutoff timer!")
+            self.log_warning_message(
+                "Error trying to start the shutoff timer!")
 
         return False
 
@@ -592,11 +596,12 @@ class RelayController(object):
                         if GAS_WARNING in gas_sensor_status:
 
                             if not self.gas_detected:
-                                gas_status = "GAS DETECTED. Level=" + str(self.mq2_sensor.current_value)
+                                gas_status = "GAS DETECTED. Level=" + \
+                                    str(self.mq2_sensor.current_value)
 
                                 if self.heater_relay.get_status() == 1:
                                     gas_status += "SHUTTING HEATER DOWN"
-                        
+
                                 self.log_warning_message(gas_status)
 
                                 # TODO - Figure out why the toggle isnt
@@ -610,7 +615,8 @@ class RelayController(object):
                             self.heater_relay.switch_low()
                         elif GAS_OK in gas_sensor_status:
                             if self.gas_detected:
-                                gas_status = "Gas warning cleared with Level=" + str(self.mq2_sensor.current_value)
+                                gas_status = "Gas warning cleared with Level=" + \
+                                    str(self.mq2_sensor.current_value)
                                 self.log_warning_message(gas_status)
                                 self.send_message_to_all_numbers(gas_status)
                                 print "Flag goes off"
@@ -625,15 +631,19 @@ class RelayController(object):
                 status_queue = self.heater_queue.get_nowait()
 
                 if ON in status_queue:
-                    self.log_info_message("Creating shutoff_timer_process for ON queue event.")
+                    self.log_info_message(
+                        "Creating shutoff_timer_process for ON queue event.")
                     self.start_heater_timer()
-                    self.log_info_message("Starting shutoff_timer_process for ON event.")
+                    self.log_info_message(
+                        "Starting shutoff_timer_process for ON event.")
                 if OFF in status_queue:
-                    self.log_info_message("Attempting to handle OFF queue event.")
+                    self.log_info_message(
+                        "Attempting to handle OFF queue event.")
                     if self.shutoff_timer_process is not None:
                         self.shutoff_timer_process.terminate()
                     else:
-                        self.log_warning_message("self.shutoff_timer_process was None in queue handler.")
+                        self.log_warning_message(
+                            "self.shutoff_timer_process was None in queue handler.")
                 if MAX_TIME in status_queue:
                     self.log_info_message(
                         "Max time reached. Heater turned OFF")
@@ -657,7 +667,8 @@ class RelayController(object):
                         message.message_text, message.sender_number)
                     self.log_info_message(response)
 
-                self.log_info_message("Found " + str(total_message_count) + " messages, processed " + str(message_count))
+                self.log_info_message(
+                    "Found " + str(total_message_count) + " messages, processed " + str(message_count))
 
 
 #############
