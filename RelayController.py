@@ -1,4 +1,8 @@
 """ Module to control a Relay by SMS """
+# TODO - Wire the status, and button pins
+# TODO - Make sure the modem commands are happening only on a single thread
+# TODO - Figure out the toggle issue
+# TODO - Make it runnable/debuggable under Mac
 import time
 import subprocess
 import Queue
@@ -351,7 +355,6 @@ class RelayController(object):
 
     def execute_command(self, command_response):
         """ Executes the action the controller has determined. """
-
         # The commands "Help", "Status", and "NoOp"
         # only send responses back to the caller
         # and do not change the heater relay
@@ -542,6 +545,9 @@ class RelayController(object):
         return False
 
     def start_heater_timer(self):
+        """
+        Starts the shutdown timer for the heater.
+        """
         self.log_info_message("Attempting to start heater shutoff timer.")
         if self.shutoff_timer_process is not None:
             self.log_warning_message(
@@ -565,6 +571,118 @@ class RelayController(object):
 
         return False
 
+    def service_gas_sensor_queue(self):
+        """
+        Runs the service code for messages coming
+        from the gas sensor.
+        """
+
+        if not self.configuration.is_mq2_enabled:
+            return False
+
+        try:
+            while not self.gas_sensor_queue.empty():
+                gas_sensor_status = self.gas_sensor_queue.get_nowait()
+
+                if gas_sensor_status is None:
+                    print "Nope"
+                else:
+                    print "Q:" + gas_sensor_status
+
+                print "has_been_detected=" + str(self.gas_detected)
+
+                self.mq2_sensor.update()
+
+                # print "QUEUE: " + myLEDqstatus
+                if GAS_WARNING in gas_sensor_status:
+
+                    if not self.gas_detected:
+                        gas_status = "GAS DETECTED. Level=" + \
+                            str(self.mq2_sensor.current_value)
+
+                        if self.heater_relay.get_status() == 1:
+                            gas_status += "SHUTTING HEATER DOWN"
+
+                        self.log_warning_message(gas_status)
+
+                        # TODO - Figure out why the toggle isnt
+                        # self.send_message_to_all_numbers(gas_status)
+                        print "Would have called. Flag=" + str(self.gas_detected)
+                        self.gas_detected = True
+                        print "Now the flag is..." + str(self.gas_detected)
+
+                    # Force the heater off command no matter
+                    # what we think the status is.
+                    self.heater_relay.switch_low()
+                elif GAS_OK in gas_sensor_status:
+                    if self.gas_detected:
+                        gas_status = "Gas warning cleared with Level=" + \
+                            str(self.mq2_sensor.current_value)
+                        self.log_warning_message(gas_status)
+                        self.send_message_to_all_numbers(gas_status)
+                        print "Flag goes off"
+                        self.gas_detected = False
+        except Queue.Empty:
+            pass
+
+        return self.gas_detected
+
+    def service_heater_queue(self):
+        """
+        Services the queue from the heater service thread.
+        """
+        # check the queue to deal with various issues,
+        # such as Max heater time and the gas sensor being tripped
+        try:
+            status_queue = self.heater_queue.get_nowait()
+
+            if ON in status_queue:
+                self.log_info_message(
+                    "Creating shutoff_timer_process for ON queue event.")
+                self.start_heater_timer()
+                self.log_info_message(
+                    "Starting shutoff_timer_process for ON event.")
+            if OFF in status_queue:
+                self.log_info_message(
+                    "Attempting to handle OFF queue event.")
+                if self.shutoff_timer_process is not None:
+                    self.shutoff_timer_process.terminate()
+                else:
+                    self.log_warning_message(
+                        "self.shutoff_timer_process was None in queue handler.")
+            if MAX_TIME in status_queue:
+                self.log_info_message(
+                    "Max time reached. Heater turned OFF")
+                self.heater_relay.switch_low()
+                self.send_message(
+                    self.push_notification_number(),
+                    "Heater was turned off due to max time being reached")
+        except Queue.Empty:
+            pass
+
+    def process_pending_text_messages(self):
+        """
+        Processes any messages sitting on the sim card.
+        """
+        # get messages on SIM Card
+        messages = self.fona.get_messages()
+        total_message_count = len(messages)
+        messages_processed_count = 0
+
+        if total_message_count > 0:
+            for message in messages:
+                messages_processed_count += 1
+                self.fona.delete_message(message)
+                response = self.process_message(
+                    message.message_text, message.sender_number)
+                self.log_info_message(response)
+
+            self.log_info_message(
+                "Found " + str(total_message_count)
+                + " messages, processed " + str(messages_processed_count))
+
+        return total_message_count > 0
+
     def run_pi_warmer(self):
         """
         Service loop to run the PiWarmer
@@ -578,97 +696,23 @@ class RelayController(object):
         while True:
             self.gas_detected = False
 
-            if self.configuration.is_mq2_enabled:
-                try:
-                    while not self.gas_sensor_queue.empty():
-                        gas_sensor_status = self.gas_sensor_queue.get_nowait()
-
-                        if gas_sensor_status is None:
-                            print "Nope"
-                        else:
-                            print "Q:" + gas_sensor_status
-
-                        print "has_been_detected=" + str(self.gas_detected)
-
-                        self.mq2_sensor.update()
-
-                        # print "QUEUE: " + myLEDqstatus
-                        if GAS_WARNING in gas_sensor_status:
-
-                            if not self.gas_detected:
-                                gas_status = "GAS DETECTED. Level=" + \
-                                    str(self.mq2_sensor.current_value)
-
-                                if self.heater_relay.get_status() == 1:
-                                    gas_status += "SHUTTING HEATER DOWN"
-
-                                self.log_warning_message(gas_status)
-
-                                # TODO - Figure out why the toggle isnt
-                                # self.send_message_to_all_numbers(gas_status)
-                                print "Would have called. Flag=" + str(self.gas_detected)
-                                self.gas_detected = True
-                                print "Now the flag is..." + str(self.gas_detected)
-
-                            # Force the heater off command no matter
-                            # what we think the status is.
-                            self.heater_relay.switch_low()
-                        elif GAS_OK in gas_sensor_status:
-                            if self.gas_detected:
-                                gas_status = "Gas warning cleared with Level=" + \
-                                    str(self.mq2_sensor.current_value)
-                                self.log_warning_message(gas_status)
-                                self.send_message_to_all_numbers(gas_status)
-                                print "Flag goes off"
-                                self.gas_detected = False
-
-                except Queue.Empty:
-                    pass
-
-            # check the queue to deal with various issues,
-            # such as Max heater time and the gas sensor being tripped
             try:
-                status_queue = self.heater_queue.get_nowait()
+                self.service_gas_sensor_queue()
+            except:
+                self.log_warning_message(
+                    "Exception captured while servicing the Gas Sensor Queue.")
 
-                if ON in status_queue:
-                    self.log_info_message(
-                        "Creating shutoff_timer_process for ON queue event.")
-                    self.start_heater_timer()
-                    self.log_info_message(
-                        "Starting shutoff_timer_process for ON event.")
-                if OFF in status_queue:
-                    self.log_info_message(
-                        "Attempting to handle OFF queue event.")
-                    if self.shutoff_timer_process is not None:
-                        self.shutoff_timer_process.terminate()
-                    else:
-                        self.log_warning_message(
-                            "self.shutoff_timer_process was None in queue handler.")
-                if MAX_TIME in status_queue:
-                    self.log_info_message(
-                        "Max time reached. Heater turned OFF")
-                    self.heater_relay.switch_low()
-                    self.send_message(
-                        self.push_notification_number(),
-                        "Heater was turned off due to max time being reached")
-            except Queue.Empty:
-                pass
+            try:
+                self.service_heater_queue()
+            except:
+                self.log_warning_message(
+                    "Exception captured while servicing the Heater/Relay Queue.")
 
-            # get messages on SIM Card
-            messages = self.fona.get_messages()
-            total_message_count = len(messages)
-
-            if total_message_count > 0:
-                message_count = 0
-                for message in messages:
-                    message_count += 1
-                    self.fona.delete_message(message)
-                    response = self.process_message(
-                        message.message_text, message.sender_number)
-                    self.log_info_message(response)
-
-                self.log_info_message(
-                    "Found " + str(total_message_count) + " messages, processed " + str(message_count))
+            try:
+                self.process_pending_text_messages()
+            except:
+                self.log_warning_message(
+                    "Exception captured while processing pending messages.")
 
 
 #############
