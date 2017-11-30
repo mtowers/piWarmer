@@ -48,13 +48,13 @@ class RelayController(object):
             return "Gas sensor NOT enabled."
 
         gas_detected = self.mq2_sensor.update()
-        status_text = "MQ2 sensor enabled, reading " + \
+        status_text = "Gas sensor enabled, current reading=" + \
             str(self.mq2_sensor.current_value)
 
         if gas_detected:
             status_text += ". DANGER! GAS DETECTED!"
         else:
-            status_text += ". Environment OK."
+            status_text += "."
 
         return status_text
 

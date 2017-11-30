@@ -27,7 +27,7 @@ class GasSensor(object):
         if local_debug.is_debug():
             self.ic2_bus = None
         else:
-            self.ic2_bus = smbus.SMBus(DEFAULT_IC2_BUS)            
+            self.ic2_bus = smbus.SMBus(DEFAULT_IC2_BUS)
 
         self.is_gas_detected = False
         self.sensor_trigger_threshold = sensor_trigger_threshold
@@ -48,7 +48,7 @@ class GasSensor(object):
             elif self.simulator_direction > 0 and self.current_value > (DEFAULT_TRIGGER_THRESHOLD * 1.1):
                 self.current_value = (DEFAULT_TRIGGER_THRESHOLD * 1.2)
                 self.simulator_direction = -1
-            
+
             self.current_value += self.simulator_direction
             return int(self.current_value)
 
@@ -73,9 +73,12 @@ class GasSensor(object):
 
         self.current_value = self.__read__(read_offset)
 
-        # TODO: The warning is being removed at the trigger level, not the all clear level
+        # For the warning to be removed, it must drop below an
+        # all clear level that is lower than the trigger level.
+        # This protects against the alarm triggering over and over
+        # again if the sensor is close to the detection level.
         if self.is_gas_detected:
-            self.is_gas_detected = self.current_value <= self.sensor_all_clear_threshold
+            self.is_gas_detected = self.current_value > self.sensor_all_clear_threshold
 
         self.is_gas_detected |= self.current_value >= self.sensor_trigger_threshold
 
@@ -86,7 +89,7 @@ if __name__ == '__main__':
     SENSOR = GasSensor()
 
     while True:
-        is_gas_detected = SENSOR.update()
-        print "LVL:" + str(SENSOR.current_value) + ", " + str(is_gas_detected)
-            # print str(sensor.update(offset))
-        time.sleep(1)
+        IS_GAS_DETECTED = SENSOR.update()
+        print "LVL:" + str(SENSOR.current_value) + ", " + str(IS_GAS_DETECTED)
+        # print str(sensor.update(offset))
+        time.sleep(0.2)
