@@ -3,7 +3,10 @@ Module to handle sending commands to the power relay.
 """
 import subprocess
 import time
-import RPi.GPIO as GPIO
+import local_debug
+
+if not local_debug.is_debug():
+    import RPi.GPIO as GPIO
 
 DEFAULT_RELAY_TYPE = "always_off"
 DEFAULT_GPIO_PIN = 18
@@ -26,19 +29,28 @@ class PowerRelay(object):
         self.name = name
         self.gpio_pin = GPIO_PIN
         self.type = relay_type
-        self.expected_status = GPIO.LOW
+        self.expected_status = 0
+        
         # setup GPIO Pins
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(GPIO_PIN, GPIO.OUT)
+
+        if not local_debug.is_debug():
+            self.expected_status = GPIO.LOW
+            GPIO.setwarnings(False)
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(GPIO_PIN, GPIO.OUT)
 
     def switch_high(self):
         """
         Sets the GPIO pin to HIGH
         """
+
+        if local_debug.is_debug():
+            self.expected_status = 1
+            return True
+
         try:
-            GPIO.output(self.gpio_pin, GPIO.HIGH)
             self.expected_status = GPIO.HIGH
+            GPIO.output(self.gpio_pin, GPIO.HIGH)
             time.sleep(3)
         except:
             return False
@@ -48,9 +60,14 @@ class PowerRelay(object):
         """
         Sets the GPIO pin to LOW
         """
+
+        if local_debug.is_debug:
+            self.expected_status = 0
+            return True
+
         try:
-            GPIO.output(self.gpio_pin, GPIO.LOW)
             self.expected_status = GPIO.LOW
+            GPIO.output(self.gpio_pin, GPIO.LOW)
             time.sleep(3)
         except:
             return False
@@ -61,6 +78,10 @@ class PowerRelay(object):
         """
         return current status of switch, 0 or 1
         """
+
+        if local_debug.is_debug():
+            return self.expected_status
+
         try:
             read_process = subprocess.Popen(["gpio -g read "
                                              + str(self.gpio_pin)],

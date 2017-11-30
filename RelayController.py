@@ -14,6 +14,7 @@ import lib.gas_sensor as gas_sensor
 import lib.fona as Fona
 from lib.relay import PowerRelay
 import lib.temp_probe as temp_probe
+import lib.local_debug as local_debug
 
 
 OFF = "Off"
@@ -142,7 +143,7 @@ class RelayController(object):
         self.last_number = None
         self.gas_detected = False
         serial_connection = self.initialize_modem()
-        if serial_connection is None:
+        if serial_connection is None and not local_debug.is_debug():
             print "Nope"
             exit()
 
@@ -161,7 +162,7 @@ class RelayController(object):
         self.shutoff_timer_process = None
         self.start_heater_timer()
 
-        if self.fona is None:
+        if self.fona is None and not local_debug.is_debug():
             self.log_warning_message("Uable to initialize, quiting.")
             exit()
 
@@ -378,7 +379,6 @@ class RelayController(object):
                 self.heater_relay.switch_high()
                 self.log_info_message("Heater turned ON")
                 self.heater_queue.put(ON)
-
             except:
                 self.log_warning_message(
                     "Issue turning on Heater")
@@ -482,7 +482,8 @@ class RelayController(object):
                 self.heater_queue.put(OFF)
                 self.heater_relay.switch_low()
 
-                time.sleep(60)
+                if not local_debug.is_debug():
+                    time.sleep(60)
             else:
                 print "Sending OK into queue"
                 self.gas_sensor_queue.put(GAS_OK)
@@ -495,6 +496,9 @@ class RelayController(object):
         """
 
         serial_connection = None
+
+        if local_debug.is_debug():
+            return None
 
         while retries > 0 and serial_connection is None:
             try:
@@ -694,8 +698,6 @@ class RelayController(object):
             time.sleep(1)
 
         while True:
-            self.gas_detected = False
-
             try:
                 self.service_gas_sensor_queue()
             except:
@@ -729,6 +731,8 @@ if __name__ == '__main__':
     CONFIG = PiWarmerConfiguration.PiWarmerConfiguration()
 
     CONTROLLER = RelayController(CONFIG, logging.getLogger("Controller"))
+
+    CONTROLLER.run_pi_warmer()
 
     print "Tests finished"
     exit()

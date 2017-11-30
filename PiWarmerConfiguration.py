@@ -2,19 +2,9 @@
 
 from sys import platform
 from ConfigParser import SafeConfigParser
+import lib.local_debug as local_debug
 
 # read in configuration settings
-
-
-def is_local_debug():
-    """
-    returns True if this should be run as a local debug (Mac or Windows).
-
-    >>> is_local_debug()
-    True
-    """
-    return platform in ["win32", "darwin"]
-
 
 def get_config_file_location():
     """
@@ -23,8 +13,6 @@ def get_config_file_location():
     >>> get_confile_file_location()
     './piWarmer.config'
     """
-    if is_local_debug():
-        return './piWarmer.config'
 
     return './piWarmer.config'
 
@@ -35,7 +23,7 @@ class PiWarmerConfiguration(object):
     def get_log_filename(self):
         """ returns the location of the logfile to use. """
 
-        if is_local_debug():
+        if local_debug.is_debug():
             return self.__config_parser__.get('SETTINGS', 'DEBUGGING_LOGFILE')
 
         return self.__config_parser__.get('SETTINGS', 'LOGFILE')
@@ -77,8 +65,6 @@ class PiWarmerConfiguration(object):
 
 def test_configuration():
     """ Test that the configuration is valid. """
-    assert is_local_debug()
-
     config = PiWarmerConfiguration()
 
     assert config.allowed_phone_numbers is not None

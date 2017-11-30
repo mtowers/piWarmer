@@ -4,12 +4,12 @@ Module to help with tha AdaFruit Fona modules
 # TODO - Need to wire the GPIO to the Fona to turn itself on
 # TODO - Could wire to the fona for a status/waiting bit
 import time
+import local_debug
 
 SECONDS_TO_WAIT_AFTER_SEND = 5
 BATTERY_CRITICAL = 40
 BATTERY_WARNING = 60
 DEFAULT_RESPONSE_READ_TIMEOUT = 5
-
 
 def escape(text):
     """
@@ -216,8 +216,11 @@ class Fona(object):
         self.name = name
         self.command_history = []
         self.serial_connection = ser
-        self.serial_connection.flushInput()
-        self.serial_connection.flushOutput()
+
+        if self.serial_connection is not None:
+            self.serial_connection.flushInput()
+            self.serial_connection.flushOutput()
+
         self.allowednumbers = allowednumbers
         self.send_command("AT")
         # self.send_command("AE0")
@@ -258,6 +261,9 @@ class Fona(object):
 
         self.command_history.append(
             "self.read_from_fona(" + str(response_timeout) + ")")
+        
+        if self.serial_connection is None:
+            return "NOCON"
 
         # print "   starting read"
         while self.serial_connection.inWaiting() > 0:
@@ -306,12 +312,15 @@ class Fona(object):
             command += '\r\r\n '
         self.command_history.append(
             "self.send_command(" + escape(command) + ")")
-        self.serial_connection.write(command)
-        time.sleep(2)
+
+        if self.serial_connection is not None:
+            self.serial_connection.write(command)
+            time.sleep(2)
+
         ret = []
 
         # print "Starting read/wait"
-        while self.serial_connection.inWaiting() > 0:
+        while self.serial_connection is not None and self.serial_connection.inWaiting() > 0:
             msg = self.serial_connection.readline().strip()
             msg = msg.replace("\r", "")
             msg = msg.replace("\n", "")
@@ -421,6 +430,10 @@ class Fona(object):
         Waits until the command has a response
         """
         self.command_history.append("self.wait_until_fona_command_response()")
+
+        if self.serial_connection is None:
+            return False
+
         start_time = time.time()
         while time.time() - start_time < 2 and self.serial_connection.inWaiting() < 1:
             time.sleep(0.5)
@@ -462,6 +475,9 @@ class Fona(object):
         Reads text messages on the SIM card and returns
         a list of messages with three fields: id, num, message.
         """
+
+        if self.serial_connection is None:
+            return []
 
         # put into SMS mode
         self.set_sms_mode()
@@ -508,8 +524,18 @@ class Fona(object):
 
 if __name__ == '__main__':
     import serial
-    PHONE_NUMBER = input("Phone number>")
-    FONA = Fona("Fona", serial.Serial('/dev/ttyUSB0', 9600),
+
+    if not local_debug.is_debug():
+        PHONE_NUMBER = input("Phone number>")
+    else:
+        PHONE_NUMBER = "2061234567"
+
+    if local_debug.is_debug():
+        SERIAL_CONNECTION = None
+    else:
+        SERIAL_CONNECTION = serial.Serial('/dev/ttyUSB0', 9600)
+
+    FONA = Fona("Fona", SERIAL_CONNECTION,
                 {PHONE_NUMBER, '18558655971'})
     # fona.get_carrier()
     BATTERY_CONDITION = FONA.get_current_battery_condition()

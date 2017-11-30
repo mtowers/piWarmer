@@ -5,7 +5,10 @@ Handy for know if you left the door open or the lights on.
 
 # https://pimylifeup.com/raspberry-pi-light-sensor/
 import time
-import RPi.GPIO as GPIO
+import local_debug
+
+if not local_debug.is_debug():
+    import RPi.GPIO as GPIO
 
 DEFAULT_GPIO_PIN = 7
 
@@ -33,16 +36,17 @@ class LightSensor(object):
         count = 0
 
         # Output on the pin for
-        GPIO.setup(light_sensor_gpio_pin, GPIO.OUT)
-        GPIO.output(light_sensor_gpio_pin, GPIO.LOW)
-        time.sleep(0.1)
+        if not local_debug.is_debug():
+            GPIO.setup(light_sensor_gpio_pin, GPIO.OUT)
+            GPIO.output(light_sensor_gpio_pin, GPIO.LOW)
+            time.sleep(0.1)
 
-        # Change the pin back to input
-        GPIO.setup(light_sensor_gpio_pin, GPIO.IN)
+            # Change the pin back to input
+            GPIO.setup(light_sensor_gpio_pin, GPIO.IN)
 
-        # Count until the pin goes high
-        while GPIO.input(light_sensor_gpio_pin) == GPIO.LOW:
-            count += 1
+            # Count until the pin goes high
+            while GPIO.input(light_sensor_gpio_pin) == GPIO.LOW:
+                count += 1
 
         return count
 
@@ -57,4 +61,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
-        GPIO.cleanup()
+        if not local_debug.is_debug():
+            GPIO.cleanup()
