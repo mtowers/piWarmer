@@ -1,13 +1,9 @@
 """ Module to control a Relay by SMS """
 # TODO - Wire the status, and button pins
-# TODO - Make sure the modem commands are happening only on a single thread
-# TODO - Figure out the toggle issue
-# TODO - Make it runnable/debuggable under Mac
 import time
 import subprocess
 import Queue
 from multiprocessing import Queue as MPQueue
-from multiprocessing import Process
 import serial  # Requires "pyserial"
 import CommandResponse
 import lib.gas_sensor as gas_sensor
@@ -137,7 +133,6 @@ class RelayController(object):
 
     def __init__(self, configuration, logger):
         """ Initialize the object. """
-        self.ready_for_service = False
         self.configuration = configuration
         self.logger = logger
         self.last_number = None
@@ -154,13 +149,11 @@ class RelayController(object):
         self.heater_relay = PowerRelay(
             "heater_relay", configuration.heater_gpio_pin)
         self.heater_queue = MPQueue()
+        self.gas_sensor_queue = MPQueue()
 
         # create queue to hold heater timer.
         self.mq2_sensor = self.__start_gas_sensor__()
-
-        self.log_info_message("Starting shutoff_timer_process in __init__")
-        self.shutoff_timer_process = None
-        self.start_heater_timer()
+        self.__heater_shutoff_timer__ = None
 
         if self.fona is None and not local_debug.is_debug():
             self.log_warning_message("Uable to initialize, quiting.")
@@ -175,14 +168,6 @@ class RelayController(object):
         self.send_message_to_all_numbers("piWarmer monitoring started."
                                          + "\n" + self.__get_help_status__())
         self.send_message_to_all_numbers(self.__get_status__())
-
-        if not self.start_monitoring_gas_sensor():
-            gas_disabled = "Unable to initialize gas sensor or thread. Disabling."
-            self.log_warning_message(gas_disabled)
-            self.send_message_to_all_numbers(gas_disabled)
-            self.mq2_sensor = None
-
-        self.ready_for_service = True
 
     def __get_help_status__(self):
         """
@@ -422,23 +407,14 @@ class RelayController(object):
         """
         Shuts down the Pi
         """
-        self.log_info_message("Assigning shutdown_timer_process in shutdown()")
+        self.log_info_message("SHUTDOWN: Turning off relay.")
         self.heater_relay.switch_low()
-        subprocess.Popen(["sudo shutdown -P now " + str(self.configuration.heater_gpio_pin)],
-                         shell=True, stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT)
 
-    # for safety, this thread starts a timer for when the heater was turned on
-    # and turns it off when reached
-    def start_heater_shutoff_timer(self):
-        """
-        Starts a timer to turn off the heater.
-        """
-        self.log_info_message("Starting Heater Timer. Max Time is " +
-                              str(self.configuration.max_minutes_to_run) + " minutes")
-        time.sleep(self.configuration.max_minutes_to_run * 60)
-        self.heater_queue.put(MAX_TIME)
-        return
+        self.log_info_message("SHUTDOWN: Shutting down piWarmer.")
+        if not local_debug.is_debug():
+            subprocess.Popen(["sudo shutdown -P now " + str(self.configuration.heater_gpio_pin)],
+                             shell=True, stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
 
     def clear_queue(self, queue):
         """
@@ -456,39 +432,33 @@ class RelayController(object):
         Monitor the Gas Sensors. Sends a warning message if gas is detected.
         """
 
-        self.log_info_message("Starting gas sensor loop.")
+        if self.mq2_sensor is None or not self.configuration.is_mq2_enabled:
+            return
 
-        while True:
-            detected = self.is_gas_detected()
-            current_level = self.mq2_sensor.current_value
+        detected = self.is_gas_detected()
+        current_level = self.mq2_sensor.current_value
 
-            print "Detected: " + str(detected) + ", Level=" + str(current_level)
+        print "Detected: " + str(detected) + ", Level=" + str(current_level)
 
-            # If gas is detected, send an immediate warning to
-            # all of the phone numberss
-            if detected:
-                self.clear_queue(self.gas_sensor_queue)
+        # If gas is detected, send an immediate warning to
+        # all of the phone numberss
+        if detected:
+            self.clear_queue(self.gas_sensor_queue)
 
-                status = "WARNING!! GAS DETECTED!!! Level = " + \
-                    str(current_level)
+            status = "WARNING!! GAS DETECTED!!! Level = " + \
+                str(current_level)
 
-                if self.heater_relay.get_status() == 1:
-                    status += ", TURNING HEATER OFF."
-                    # clear the queue if it has a bunch of no warnings in it
+            if self.heater_relay.get_status() == 1:
+                status += ", TURNING HEATER OFF."
+                # clear the queue if it has a bunch of no warnings in it
 
-                self.log_warning_message(status)
-                print "Shoving command into queue"
-                self.gas_sensor_queue.put(GAS_WARNING)
-                self.heater_queue.put(OFF)
-                self.heater_relay.switch_low()
-
-                if not local_debug.is_debug():
-                    time.sleep(60)
-            else:
-                print "Sending OK into queue"
-                self.gas_sensor_queue.put(GAS_OK)
-
-            time.sleep(2)
+            self.log_warning_message(status)
+            print "Shoving command into queue"
+            self.gas_sensor_queue.put(GAS_WARNING)
+            self.heater_queue.put(OFF)
+        else:
+            print "Sending OK into queue"
+            self.gas_sensor_queue.put(GAS_OK)
 
     def initialize_modem(self, retries=4, seconds_between_retries=10):
         """
@@ -523,57 +493,23 @@ class RelayController(object):
 
         return serial_connection
 
-    def start_monitoring_gas_sensor(self):
+    def stop_heater_timer(self):
         """
-        Initializes and enables the MQ2 Gas Sensor
+        Stops the heater timer.
         """
-        self.gas_sensor_queue = MPQueue()
 
-        if self.configuration.is_mq2_enabled:
-            self.log_info_message("MQ2 Gas Sensor enabled")
-            # setup MQ2 GPIO PINS
-            # create queue to hold MQ2 LED status
-            # start sub process to monitor actual MQ2 sensor
-            gas_sensor_process = Process(target=self.monitor_gas_sensor)
-
-            if gas_sensor_process is None:
-                self.log_warning_message("Failed to create gas sensor thread.")
-                exit()
-
-            gas_sensor_process.start()
-
-            return True
-        else:
-            self.log_info_message("MQ2 Sensor not enabled")
-
-        return False
+        self.log_info_message("Cancelling the heater shutoff timer.")
+        self.__heater_shutoff_timer__ = None
 
     def start_heater_timer(self):
         """
         Starts the shutdown timer for the heater.
         """
-        self.log_info_message("Attempting to start heater shutoff timer.")
-        if self.shutoff_timer_process is not None:
-            self.log_warning_message(
-                "Turn off process already existed. Stopping.")
-            self.shutoff_timer_process.terminate()
-        self.shutoff_timer_process = Process(
-            target=self.start_heater_shutoff_timer)
-        if self.shutoff_timer_process is None:
-            self.log_warning_message("FAILED to create shutoff timer.")
+        self.log_info_message("Starting the heater shutoff timer.")
+        self.__heater_shutoff_timer__ = time.time(
+        ) + (self.configuration.max_minutes_to_run * 60)
 
-            return False
-
-        try:
-            self.shutoff_timer_process.start()
-            self.log_info_message("Shutoff timer created")
-
-            return True
-        except:
-            self.log_warning_message(
-                "Error trying to start the shutoff timer!")
-
-        return False
+        return True
 
     def service_gas_sensor_queue(self):
         """
@@ -609,8 +545,7 @@ class RelayController(object):
 
                         self.log_warning_message(gas_status)
 
-                        # TODO - Figure out why the toggle isnt
-                        # self.send_message_to_all_numbers(gas_status)
+                        self.send_message_to_all_numbers(gas_status)
                         print "Would have called. Flag=" + str(self.gas_detected)
                         self.gas_detected = True
                         print "Now the flag is..." + str(self.gas_detected)
@@ -635,34 +570,37 @@ class RelayController(object):
         """
         Services the queue from the heater service thread.
         """
+
+        # Check to see if the timer has expired.
+        # If so, then add it to the action.
+        if self.__heater_shutoff_timer__ is not None and self.__heater_shutoff_timer__ > time.time():
+            self.heater_queue.put(MAX_TIME)
+
         # check the queue to deal with various issues,
         # such as Max heater time and the gas sensor being tripped
-        try:
-            status_queue = self.heater_queue.get_nowait()
+        while not self.heater_queue.empty():
+            try:
+                status_queue = self.heater_queue.get_nowait()
 
-            if ON in status_queue:
-                self.log_info_message(
-                    "Creating shutoff_timer_process for ON queue event.")
-                self.start_heater_timer()
-                self.log_info_message(
-                    "Starting shutoff_timer_process for ON event.")
-            if OFF in status_queue:
-                self.log_info_message(
-                    "Attempting to handle OFF queue event.")
-                if self.shutoff_timer_process is not None:
-                    self.shutoff_timer_process.terminate()
-                else:
-                    self.log_warning_message(
-                        "self.shutoff_timer_process was None in queue handler.")
-            if MAX_TIME in status_queue:
-                self.log_info_message(
-                    "Max time reached. Heater turned OFF")
-                self.heater_relay.switch_low()
-                self.send_message(
-                    self.push_notification_number(),
-                    "Heater was turned off due to max time being reached")
-        except Queue.Empty:
-            pass
+                if ON in status_queue:
+                    self.start_heater_timer()
+
+                if OFF in status_queue:
+                    self.stop_heater_timer()
+
+                    self.log_info_message(
+                        "Attempting to handle OFF queue event.")
+                    self.heater_relay.switch_low()
+
+                if MAX_TIME in status_queue:
+                    self.log_info_message(
+                        "Max time reached. Heater turned OFF")
+                    self.heater_relay.switch_low()
+                    self.send_message(
+                        self.push_notification_number(),
+                        "Heater was turned off due to max time being reached")
+            except Queue.Empty:
+                pass
 
     def process_pending_text_messages(self):
         """
@@ -693,11 +631,13 @@ class RelayController(object):
         """
         self.log_info_message('Press Ctrl-C to quit.')
 
-        while not self.ready_for_service:
-            print "."
-            time.sleep(1)
-
         while True:
+            try:
+                self.monitor_gas_sensor()
+            except:
+                self.log_warning_message(
+                    "Exception captured while servicing the Gas Sensor Queue.")
+
             try:
                 self.service_gas_sensor_queue()
             except:
