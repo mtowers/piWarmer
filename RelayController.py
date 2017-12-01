@@ -20,6 +20,22 @@ GAS_WARNING = "gas_warning"
 GAS_OK = "no_warning"
 
 
+class MessageSendRequest(object):
+    """
+    Object to use for queuing message requests.
+    """
+
+    def is_valid(self):
+        """
+        Is the message valid.
+        """
+        return self.phone_number is not None and self.message is not None
+
+    def __init__(self, phone_number, message):
+        self.phone_number = phone_number
+        self.message = message
+
+
 class RelayController(object):
     """ Class to control a power relay based on SMS commands. """
 
@@ -33,9 +49,9 @@ class RelayController(object):
         num_deleted = self.fona.delete_messages(False)
         if num_deleted > 0:
             for phone_number in self.configuration.allowed_phone_numbers:
-                self.send_message(phone_number,
-                                  "Old or unprocessed message(s) found on SIM Card."
-                                  + " Deleting...")
+                self.queue_message(phone_number,
+                                   "Old or unprocessed message(s) found on SIM Card."
+                                   + " Deleting...")
             self.log_info_message(
                 str(num_deleted) + " old message cleared from SIM Card")
 
@@ -150,6 +166,7 @@ class RelayController(object):
             "heater_relay", configuration.heater_gpio_pin)
         self.heater_queue = MPQueue()
         self.gas_sensor_queue = MPQueue()
+        self.message_send_queue = MPQueue()
 
         # create queue to hold heater timer.
         self.mq2_sensor = self.__start_gas_sensor__()
@@ -165,15 +182,40 @@ class RelayController(object):
         self.__clear_existing_messages__()
 
         self.log_info_message("Begin monitoring for SMS messages")
-        self.send_message_to_all_numbers("piWarmer monitoring started."
-                                         + "\n" + self.__get_help_status__())
-        self.send_message_to_all_numbers(self.__get_status__())
+        self.queue_message_to_all_numbers("piWarmer monitoring started."
+                                          + "\n" + self.__get_help_status__())
+        self.queue_message_to_all_numbers(self.__get_status__())
 
     def __get_help_status__(self):
         """
         Returns the message for help.
         """
         return "To control the piWarmer text ON, OFF, STATUS, HELP, or SHUTDOWN"
+
+    def queue_message(self, phone_number, message):
+        """
+        Puts a request to send a message into the queue.
+        """
+        if self.message_send_queue is not None and phone_number is not None and message is not None:
+            self.message_send_queue.put(
+                MessageSendRequest(phone_number, message))
+
+            return True
+
+        return False
+
+    def queue_message_to_all_numbers(self, message):
+        """
+        Puts a request to send a message to all numbers into the queue.
+        """
+
+        for phone_number in self.configuration.allowed_phone_numbers:
+            self.queue_message(phone_number, message)
+
+        if (self.configuration.push_notification_number
+                not in self.configuration.allowed_phone_numbers):
+            self.queue_message(
+                self.configuration.push_notification_number, message)
 
     def send_message(self, phone_number, message):
         """
@@ -189,23 +231,6 @@ class RelayController(object):
             self.log_warning_message("Error while attemting to send message.")
 
         return False
-
-    def send_message_to_all_numbers(self, message):
-        """ Sends a message to ALL of the numbers in the configuration. """
-        if message is None:
-            return False
-
-        self.log_info_message("Sending messages to all: " + message)
-
-        for phone_number in self.configuration.allowed_phone_numbers:
-            self.send_message(phone_number, message)
-
-        if (self.configuration.push_notification_number
-                not in self.configuration.allowed_phone_numbers):
-            self.send_message(
-                self.configuration.push_notification_number, message)
-
-        return True
 
     def log_info_message(self, message_to_log):
         """ Log and print at Info level """
@@ -381,7 +406,7 @@ class RelayController(object):
         # check to see if this is an allowed phone number
         if not self.is_allowed_phone_number(phone_number):
             unauth_message = "Received unauthorized SMS from " + phone_number
-            self.send_message(
+            self.queue_message(
                 self.push_notification_number, unauth_message)
             return self.log_warning_message(unauth_message)
 
@@ -393,7 +418,7 @@ class RelayController(object):
             self.last_number = phone_number
 
         if phone_number is not None:
-            self.send_message(
+            self.queue_message(
                 phone_number, command_response.get_message())
             self.log_info_message(
                 "Sent message: " + command_response.get_message() + " to " + phone_number)
@@ -545,7 +570,7 @@ class RelayController(object):
 
                         self.log_warning_message(gas_status)
 
-                        self.send_message_to_all_numbers(gas_status)
+                        self.queue_message_to_all_numbers(gas_status)
                         print "Would have called. Flag=" + str(self.gas_detected)
                         self.gas_detected = True
                         print "Now the flag is..." + str(self.gas_detected)
@@ -558,7 +583,7 @@ class RelayController(object):
                         gas_status = "Gas warning cleared with Level=" + \
                             str(self.mq2_sensor.current_value)
                         self.log_warning_message(gas_status)
-                        self.send_message_to_all_numbers(gas_status)
+                        self.queue_message_to_all_numbers(gas_status)
                         print "Flag goes off"
                         self.gas_detected = False
         except Queue.Empty:
@@ -596,7 +621,7 @@ class RelayController(object):
                     self.log_info_message(
                         "Max time reached. Heater turned OFF")
                     self.heater_relay.switch_low()
-                    self.send_message(
+                    self.queue_message(
                         self.push_notification_number(),
                         "Heater was turned off due to max time being reached")
             except Queue.Empty:
@@ -625,6 +650,29 @@ class RelayController(object):
 
         return total_message_count > 0
 
+    def process_message_send_requests(self):
+        """
+        Process all of the requests to send messages.
+        """
+
+        if self.message_send_queue is None:
+            return False
+
+        is_success = True
+
+        while not self.message_send_queue.empty():
+            try:
+                send_request = self.message_send_queue.get_nowait()
+
+                self.send_message(send_request.phone_number,
+                                  send_request.message)
+            except:
+                self.log_warning_message(
+                    "Error while processing sending queue!")
+                is_success = False
+
+        return is_success
+
     def run_pi_warmer(self):
         """
         Service loop to run the PiWarmer
@@ -652,6 +700,12 @@ class RelayController(object):
 
             try:
                 self.process_pending_text_messages()
+            except:
+                self.log_warning_message(
+                    "Exception captured while processing pending messages.")
+
+            try:
+                self.process_message_send_requests()
             except:
                 self.log_warning_message(
                     "Exception captured while processing pending messages.")
