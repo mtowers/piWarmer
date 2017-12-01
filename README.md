@@ -33,6 +33,42 @@ The file also includes a phone number that any alerts will be sent to.
 
 For a complete set of installation instructions, visit [https://github.com/mdegrazia/piWarmer/wiki](https://github.com/mdegrazia/piWarmer/wiki).
 
+## Wiring
+
+### Relay
+- Red wire from GPIO 18 to Relay "+"
+- Black wire from Relay "-" to GPIO GND
+
+### Fona
+
+- TTL Black to Fona "GND"
+- TTL White to Fona "TX"
+- TTL Green to Fona "RX"
+- TTL Red to Fona "Vio"
+- USB to Pi USB
+
+### MQ2 Gas Sensor / ADC
+
+#### ADC
+- Red F/M: VCC to GPIO 3V3
+- Black ADC GND to GPIO GND
+- White ADC SDA to GPIO SDAI
+- Gray ADC SCL to GPIO SCLI
+- White F/F ADC AIN0 to MQ2 White
+
+#### MQ2
+- Pigtail Connector into reciever
+- Red to GPIO 3V3
+- Black to GPIO GND
+- Brown to GPIO 12
+
+
+### Temp Sensor
+- White plug into Temp Sensor
+- Yellow to GPIO04
+- Red to +5VO
+- Black to GPIO GND
+
 ## Additional Links And Setup Notes
 
 ** The MQ-2 needs to be installed with an analog-to-digital converter **

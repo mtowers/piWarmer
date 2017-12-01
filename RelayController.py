@@ -1,5 +1,6 @@
 """ Module to control a Relay by SMS """
 # TODO - Wire the status, and button pins
+# TODO - DO NOT CAPTURE keyboard interupt exceptions
 import time
 import subprocess
 import Queue
@@ -98,7 +99,12 @@ class RelayController(object):
         status_text = "Heater is "
 
         if self.heater_relay.get_status() == 1:
-            status_text += "ON"
+            status_text += "ON. "
+            if self.__heater_shutoff_timer__ is not None:
+                time_left = int((self.__heater_shutoff_timer__ - time.time()) / 60.0)
+                status_text += str(time_left) + "Minutes remaining."
+            else:
+                status_text += "Unknown time left."
         else:
             status_text += "OFF"
 
@@ -120,9 +126,7 @@ class RelayController(object):
         status = "Cell signal is " + signal.classify_strength() + ", battery at " + \
             str(cbc.battery_percent) + "%, "
 
-        if cbc.is_battery_ok():
-            status += "OK."
-        else:
+        if not cbc.is_battery_ok():
             status += "LOW BATTERY."
 
         return status
@@ -171,6 +175,7 @@ class RelayController(object):
         # create queue to hold heater timer.
         self.mq2_sensor = self.__start_gas_sensor__()
         self.__heater_shutoff_timer__ = None
+        self.__fona_battery_check_timer__ = time.time()
 
         if self.fona is None and not local_debug.is_debug():
             self.log_warning_message("Uable to initialize, quiting.")
@@ -317,7 +322,6 @@ class RelayController(object):
 
         if self.heater_relay.get_status() == 1:
             try:
-                self.heater_relay.switch_low()
                 self.heater_queue.put(OFF)
                 return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
                                                        "Heater turned OFF")
@@ -378,7 +382,6 @@ class RelayController(object):
                     "Issue shutting down Raspberry Pi")
         elif command_response.get_command() == CommandResponse.HEATER_OFF:
             try:
-                self.heater_relay.switch_low()
                 self.log_info_message("Heater turned OFF")
                 self.heater_queue.put(OFF)
             except:
@@ -386,7 +389,6 @@ class RelayController(object):
                     "Issue turning off Heater")
         elif command_response.get_command() == CommandResponse.HEATER_ON:
             try:
-                self.heater_relay.switch_high()
                 self.log_info_message("Heater turned ON")
                 self.heater_queue.put(ON)
             except:
@@ -577,7 +579,7 @@ class RelayController(object):
 
                     # Force the heater off command no matter
                     # what we think the status is.
-                    self.heater_relay.switch_low()
+                    self.heater_queue.put(OFF)
                 elif GAS_OK in gas_sensor_status:
                     if self.gas_detected:
                         gas_status = "Gas warning cleared with Level=" + \
@@ -590,6 +592,22 @@ class RelayController(object):
             pass
 
         return self.gas_detected
+    
+    def __stop_heater__(self):
+        """
+        Stops the heater.
+        """
+        print "__stop_heater__::switch_low()"
+        self.heater_relay.switch_low()
+        print "__stop_heater__::stop_heater_timer()"
+        self.stop_heater_timer()
+
+    def __start_heater__(self):
+        """
+        Starts the heater.
+        """
+        self.heater_relay.switch_high()
+        self.start_heater_timer()
 
     def service_heater_queue(self):
         """
@@ -600,6 +618,9 @@ class RelayController(object):
         # If so, then add it to the action.
         if self.__heater_shutoff_timer__ is not None and self.__heater_shutoff_timer__ > time.time():
             self.heater_queue.put(MAX_TIME)
+        elif self.__heater_shutoff_timer__ is None and self.heater_relay.get_status() == 1:
+            self.log_warning("Heater should not be on, but the PIN is still active... attempting shutdown.")
+            self.heater_queue.put(OFF)
 
         # check the queue to deal with various issues,
         # such as Max heater time and the gas sensor being tripped
@@ -608,22 +629,20 @@ class RelayController(object):
                 status_queue = self.heater_queue.get_nowait()
 
                 if ON in status_queue:
-                    self.start_heater_timer()
+                    self.__start_heater__()
 
                 if OFF in status_queue:
-                    self.stop_heater_timer()
-
-                    self.log_info_message(
-                        "Attempting to handle OFF queue event.")
-                    self.heater_relay.switch_low()
+                    print "Attempting to handle OFF queue event."
+                    self.queue_message_to_all_numbers("Heater turned off.")
+                    print "STOP MSG queued, stopping."
+                    self.__stop_heater__()
 
                 if MAX_TIME in status_queue:
-                    self.log_info_message(
-                        "Max time reached. Heater turned OFF")
-                    self.heater_relay.switch_low()
-                    self.queue_message(
-                        self.push_notification_number(),
+                    print "Max time reached. Heater turned OFF"
+                    self.queue_message_to_all_numbers(
                         "Heater was turned off due to max time being reached")
+                    print "MAX MSG queued, stopping,"
+                    self.__stop_heater__()
             except Queue.Empty:
                 pass
 
@@ -637,6 +656,10 @@ class RelayController(object):
         messages_processed_count = 0
 
         if total_message_count > 0:
+            # TODO - Sort these messages so they are processed
+            # in the order they were sent.
+            # The order of reception by the GSM
+            # chip can be out of order.
             for message in messages:
                 messages_processed_count += 1
                 self.fona.delete_message(message)
@@ -673,18 +696,52 @@ class RelayController(object):
 
         return is_success
 
+    def monitor_fona_health(self):
+        """
+        Check to make sure the Fona battery and
+        other health signals are OK.
+        """
+
+        print "monitor_fona_health"
+        if time.time() > self.__fona_battery_check_timer__:
+            print "Getting CBC"
+            cbc = self.fona.get_current_battery_condition()
+
+            print "Build CBC status log"
+            print "GSM Battery at " + str(cbc.get_percent_battery()) + "%"
+
+            if cbc.is_battery_ok():
+                # All is OK. Check again in 15 minutes
+                print "Battery is OK." 
+                self.__fona_battery_check_timer__ = time.time() + 15 * 60
+            else:
+                print "Battery LOW"
+                low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + str(cbc.get_percent_battery()) + "%"
+                self.queue_message_to_all_numbers(low_battery_message)
+
+                # Check again in an hour
+                self.__fona_battery_check_timer__ = time.time() + 60 * 60
+
     def run_pi_warmer(self):
         """
         Service loop to run the PiWarmer
         """
         self.log_info_message('Press Ctrl-C to quit.')
 
+        # TODO - Make this loop killable by CTRL+C
+        # TODO - Make this code less messy
         while True:
             try:
                 self.monitor_gas_sensor()
             except:
                 self.log_warning_message(
                     "Exception captured while servicing the Gas Sensor Queue.")
+
+            try:
+                self.monitor_fona_health()
+            except:
+                self.log_warning_message(
+                    "Exception while monitoring the Fona board.")
 
             try:
                 self.service_gas_sensor_queue()

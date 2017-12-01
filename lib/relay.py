@@ -34,6 +34,7 @@ class PowerRelay(object):
         # setup GPIO Pins
 
         if not local_debug.is_debug():
+            print "Setting " + str(GPIO_PIN) + " to BCM/OUT"
             self.expected_status = GPIO.LOW
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BCM)
@@ -49,6 +50,7 @@ class PowerRelay(object):
             return True
 
         try:
+            print "Setting to OUT/HIGH"
             self.expected_status = GPIO.HIGH
             GPIO.output(self.gpio_pin, GPIO.HIGH)
             time.sleep(3)
@@ -61,11 +63,12 @@ class PowerRelay(object):
         Sets the GPIO pin to LOW
         """
 
-        if local_debug.is_debug:
+        if local_debug.is_debug():
             self.expected_status = 0
             return True
 
         try:
+            print "Setting to OUT/LOW"
             self.expected_status = GPIO.LOW
             GPIO.output(self.gpio_pin, GPIO.LOW)
             time.sleep(3)
