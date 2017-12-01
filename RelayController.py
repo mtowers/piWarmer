@@ -1,6 +1,10 @@
 """ Module to control a Relay by SMS """
 # TODO - Wire the status, and button pins
 # TODO - DO NOT CAPTURE keyboard interupt exceptions
+# TODO - Run the "unescape" code on the Log entries.
+# TODO - Fix "double" "Heater turned off" message bug - May be coming from the push notification number /
+#        allowed_number_interaction
+# TODO - Fix string precision on temperture
 import time
 import subprocess
 import Queue
@@ -102,7 +106,7 @@ class RelayController(object):
             status_text += "ON. "
             if self.__heater_shutoff_timer__ is not None:
                 time_left = int((self.__heater_shutoff_timer__ - time.time()) / 60.0)
-                status_text += str(time_left) + "Minutes remaining."
+                status_text += str(time_left) + " minutes remaining."
             else:
                 status_text += "Unknown time left."
         else:
@@ -217,8 +221,7 @@ class RelayController(object):
         for phone_number in self.configuration.allowed_phone_numbers:
             self.queue_message(phone_number, message)
 
-        if (self.configuration.push_notification_number
-                not in self.configuration.allowed_phone_numbers):
+        if not self.is_allowed_phone_number(self.configuration.push_notification_number):
             self.queue_message(
                 self.configuration.push_notification_number, message)
 
@@ -324,7 +327,7 @@ class RelayController(object):
             try:
                 self.heater_queue.put(OFF)
                 return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
-                                                       "Heater turned OFF")
+                                                       "Turning heater off...")
             except:
                 return CommandResponse.CommandResponse(CommandResponse.ERROR,
                                                        "Issue turning Heater OFF")
@@ -356,6 +359,8 @@ class RelayController(object):
             return self.handle_on_request(phone_number)
         elif "off" in message:
             return self.handle_off_request(phone_number)
+        elif "quit" in message:
+            exit()
         elif "status" in message:
             return self.handle_status_request(phone_number)
         elif "help" in message:
@@ -365,8 +370,7 @@ class RelayController(object):
                                                    "Received SHUTDOWN request from " + phone_number)
 
         return CommandResponse.CommandResponse(CommandResponse.HELP,
-                                               "Please text ON,OFF,STATUS or"
-                                               + " SHUTDOWN to control heater")
+                                               "COMMANDS: ON, OFF, STATUS, QUIT, SHUTDOWN")
 
     def execute_command(self, command_response):
         """ Executes the action the controller has determined. """
@@ -616,7 +620,7 @@ class RelayController(object):
 
         # Check to see if the timer has expired.
         # If so, then add it to the action.
-        if self.__heater_shutoff_timer__ is not None and self.__heater_shutoff_timer__ > time.time():
+        if self.__heater_shutoff_timer__ is not None and self.__heater_shutoff_timer__ < time.time():
             self.heater_queue.put(MAX_TIME)
         elif self.__heater_shutoff_timer__ is None and self.heater_relay.get_status() == 1:
             self.log_warning("Heater should not be on, but the PIN is still active... attempting shutdown.")
