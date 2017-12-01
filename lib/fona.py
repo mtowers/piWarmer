@@ -11,6 +11,7 @@ BATTERY_CRITICAL = 40
 BATTERY_WARNING = 60
 DEFAULT_RESPONSE_READ_TIMEOUT = 5
 
+
 def escape(text):
     """
     Replaces escape sequences do they can be printed.
@@ -261,7 +262,7 @@ class Fona(object):
 
         self.command_history.append(
             "self.read_from_fona(" + str(response_timeout) + ")")
-        
+
         if self.serial_connection is None:
             return "NOCON"
 

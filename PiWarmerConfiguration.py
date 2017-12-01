@@ -1,6 +1,5 @@
 """ Module to abstract and hide configuration. """
 
-from sys import platform
 from ConfigParser import SafeConfigParser
 import lib.local_debug as local_debug
 

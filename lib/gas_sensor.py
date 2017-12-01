@@ -42,10 +42,13 @@ class GasSensor(object):
 
         # Provide a mock/simulator for debugging on Mac/Windows
         if local_debug.is_debug():
-            if self.simulator_direction < 0 and self.current_value is None or (self.current_value <= 0 or self.current_value < (DEFAULT_ALL_CLEAR_THRESHOLD * 0.9)):
+            bounce_up_threshold = DEFAULT_ALL_CLEAR_THRESHOLD * 0.9
+            bounce_down_threshold = DEFAULT_TRIGGER_THRESHOLD * 1.1
+            if self.simulator_direction < 0 and self.current_value is None \
+                    or (self.current_value <= 0 or self.current_value < bounce_up_threshold):
                 self.simulator_direction = 1
                 self.current_value = DEFAULT_ALL_CLEAR_THRESHOLD * 0.9
-            elif self.simulator_direction > 0 and self.current_value > (DEFAULT_TRIGGER_THRESHOLD * 1.1):
+            elif self.simulator_direction > 0 and self.current_value > bounce_down_threshold:
                 self.current_value = (DEFAULT_TRIGGER_THRESHOLD * 1.2)
                 self.simulator_direction = -1
 

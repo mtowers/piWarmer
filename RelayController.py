@@ -1,6 +1,14 @@
 """ Module to control a Relay by SMS """
 # TODO - Wire the status, and button pins
 # TODO - DO NOT CAPTURE keyboard interupt exceptions
+# TODO - Add a restart command
+# TODO - Figure out process management
+# TODO - Add an "Uptime" status
+# TODO - Add Temp logging
+# TODO - Add Gas sensor logging
+# TODO - Escape the main logs for \n and \r
+# TODO - Figure out process managment
+# TODO - Make "Quit" work
 import time
 import subprocess
 import Queue
@@ -101,7 +109,8 @@ class RelayController(object):
         if self.heater_relay.get_status() == 1:
             status_text += "ON. "
             if self.__heater_shutoff_timer__ is not None:
-                time_left = int((self.__heater_shutoff_timer__ - time.time()) / 60.0)
+                time_left = int(
+                    (self.__heater_shutoff_timer__ - time.time()) / 60.0)
                 status_text += str(time_left) + "Minutes remaining."
             else:
                 status_text += "Unknown time left."
@@ -592,7 +601,7 @@ class RelayController(object):
             pass
 
         return self.gas_detected
-    
+
     def __stop_heater__(self):
         """
         Stops the heater.
@@ -616,10 +625,13 @@ class RelayController(object):
 
         # Check to see if the timer has expired.
         # If so, then add it to the action.
-        if self.__heater_shutoff_timer__ is not None and self.__heater_shutoff_timer__ > time.time():
+        if self.__heater_shutoff_timer__ is not None \
+                and self.__heater_shutoff_timer__ > time.time():
             self.heater_queue.put(MAX_TIME)
-        elif self.__heater_shutoff_timer__ is None and self.heater_relay.get_status() == 1:
-            self.log_warning("Heater should not be on, but the PIN is still active... attempting shutdown.")
+        elif self.__heater_shutoff_timer__ is None \
+                and self.heater_relay.get_status() == 1:
+            self.log_warning_message(
+                "Heater should not be on, but the PIN is still active... attempting shutdown.")
             self.heater_queue.put(OFF)
 
         # check the queue to deal with various issues,
@@ -712,11 +724,12 @@ class RelayController(object):
 
             if cbc.is_battery_ok():
                 # All is OK. Check again in 15 minutes
-                print "Battery is OK." 
+                print "Battery is OK."
                 self.__fona_battery_check_timer__ = time.time() + 15 * 60
             else:
                 print "Battery LOW"
-                low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + str(cbc.get_percent_battery()) + "%"
+                low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + \
+                    str(cbc.get_percent_battery()) + "%"
                 self.queue_message_to_all_numbers(low_battery_message)
 
                 # Check again in an hour
