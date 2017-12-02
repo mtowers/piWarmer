@@ -5,12 +5,19 @@
 
 # TODO - Wire the status, and button pins
 # TODO - DO NOT CAPTURE keyboard interupt exceptions
-# TODO - Fix "double" "Heater turned off" message bug - May be coming from the push notification number /
-#        allowed_number_interaction
 # TODO - Fix string precision on temperture
 # TODO - Make sure strings can handle unicode
 # TODO - Make commands and help response customizable for Localization
 # TODO - Separate logs for the sensors
+# TODO - Add a restart command
+# TODO - Figure out process management
+# TODO - Add an "Uptime" status
+# TODO - Add Temp logging
+# TODO - Add Gas sensor logging
+# TODO - Escape the main logs for \n and \r
+# TODO - Figure out process managment
+# TODO - Make "Quit" work
+
 import time
 import subprocess
 import Queue
@@ -111,8 +118,9 @@ class RelayController(object):
         if self.heater_relay.get_status() == 1:
             status_text += "ON. "
             if self.__heater_shutoff_timer__ is not None:
-                time_left = int((self.__heater_shutoff_timer__ - time.time()) / 60.0)
-                status_text += str(time_left) + " minutes remaining."
+                time_left = int(
+                    (self.__heater_shutoff_timer__ - time.time()) / 60.0)
+                status_text += str(time_left) + "Minutes remaining."
             else:
                 status_text += "Unknown time left."
         else:
@@ -211,6 +219,7 @@ class RelayController(object):
         Puts a request to send a message into the queue.
         """
         if self.message_send_queue is not None and phone_number is not None and message is not None:
+            self.log_info_message("MSG - " + phone_number + " : " + Fona.escape(message))
             self.message_send_queue.put(
                 MessageSendRequest(phone_number, message))
 
@@ -225,10 +234,6 @@ class RelayController(object):
 
         for phone_number in self.configuration.allowed_phone_numbers:
             self.queue_message(phone_number, message)
-
-        if not self.is_allowed_phone_number(self.push_notification_number()):
-            self.queue_message(
-                self.push_notification_number(), message)
 
     def send_message(self, phone_number, message):
         """
@@ -259,18 +264,6 @@ class RelayController(object):
 
         return message_to_log
 
-    def push_notification_number(self):
-        """
-        Returns a phone number to return command responses back to.
-        """
-        if self.configuration.push_notification_number is not None:
-            return self.configuration.push_notification_number
-
-        if self.configuration.push_notification_number is not None:
-            return self.configuration.push_notification_number[0]
-
-        return None
-
     def get_mq2_status(self):
         """ Returns the state of the gas detector """
 
@@ -297,7 +290,11 @@ class RelayController(object):
                 "Checking " + phone_number + " against " + allowed_number)
             # Handle phone numbers that start with "1"... sometimes
             if allowed_number in phone_number or phone_number in allowed_number:
+                self.log_info_message(phone_number + " is allowed")
                 return True
+
+        self.log_info_message(phone_number + " is denied")
+        return False
 
     def handle_on_request(self, phone_number):
         """ Handle a request to turn on. """
@@ -414,14 +411,12 @@ class RelayController(object):
         # check to see if this is an allowed phone number
         if not self.is_allowed_phone_number(phone_number):
             unauth_message = "Received unauthorized SMS from " + phone_number
-            self.queue_message(
-                self.push_notification_number(), unauth_message)
+            self.queue_message_to_all_numbers(unauth_message)
             return self.log_warning_message(unauth_message)
 
         if len(phone_number) < 7:
             invalid_number_message = "Attempt from invalid phone number " + phone_number + " received."
-            self.queue_message(
-                self.push_notification_number(), invalid_number_message)
+            self.queue_message_to_all_numbers(invalid_number_message)
             return self.log_warning_message(invalid_number_message)
 
         message_length = len(message)
@@ -603,7 +598,7 @@ class RelayController(object):
             pass
 
         return self.gas_detected
-    
+
     def __stop_heater__(self):
         """
         Stops the heater.
@@ -627,10 +622,13 @@ class RelayController(object):
 
         # Check to see if the timer has expired.
         # If so, then add it to the action.
-        if self.__heater_shutoff_timer__ is not None and self.__heater_shutoff_timer__ < time.time():
+        if self.__heater_shutoff_timer__ is not None \
+                and self.__heater_shutoff_timer__ < time.time():
             self.heater_queue.put(MAX_TIME)
-        elif self.__heater_shutoff_timer__ is None and self.heater_relay.get_status() == 1:
-            self.log_warning("Heater should not be on, but the PIN is still active... attempting shutdown.")
+        elif self.__heater_shutoff_timer__ is None \
+                and self.heater_relay.get_status() == 1:
+            self.log_warning_message(
+                "Heater should not be on, but the PIN is still active... attempting shutdown.")
             self.heater_queue.put(OFF)
 
         # check the queue to deal with various issues,
@@ -723,11 +721,12 @@ class RelayController(object):
 
             if cbc.is_battery_ok():
                 # All is OK. Check again in 15 minutes
-                print "Battery is OK." 
+                print "Battery is OK."
                 self.__fona_battery_check_timer__ = time.time() + 15 * 60
             else:
                 print "Battery LOW"
-                low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + str(cbc.get_percent_battery()) + "%"
+                low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + \
+                    str(cbc.get_percent_battery()) + "%"
                 self.queue_message_to_all_numbers(low_battery_message)
 
                 # Check again in an hour

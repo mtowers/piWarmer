@@ -30,7 +30,7 @@ class PowerRelay(object):
         self.gpio_pin = GPIO_PIN
         self.type = relay_type
         self.expected_status = 0
-        
+
         # setup GPIO Pins
 
         if not local_debug.is_debug():

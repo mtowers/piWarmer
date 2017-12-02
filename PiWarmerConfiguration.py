@@ -47,8 +47,6 @@ class PiWarmerConfiguration(object):
             'SETTINGS', 'TEMP')
         self.allowed_phone_numbers = self.__config_parser__.get(
             'SETTINGS', 'ALLOWED_PHONE_NUMBERS')
-        self.push_notification_number = self.__config_parser__.get('SETTINGS',
-                                                                   'PUSH_NOTIFICATION_NUMBER')
         self.allowed_phone_numbers = self.allowed_phone_numbers.split(',')
         self.max_minutes_to_run = self.__config_parser__.getint(
             'SETTINGS', 'MAX_HEATER_TIME')
@@ -80,7 +78,6 @@ def test_configuration():
     assert config.is_temp_probe_enabled is not None
     assert config.log_filename is not None
     assert config.max_minutes_to_run == 60
-    assert config.push_notification_number is not None
 
 
 if __name__ == '__main__':
