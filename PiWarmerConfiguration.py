@@ -1,5 +1,7 @@
 """ Module to abstract and hide configuration. """
 
+# encoding: UTF-8
+
 from sys import platform
 from ConfigParser import SafeConfigParser
 import lib.local_debug as local_debug

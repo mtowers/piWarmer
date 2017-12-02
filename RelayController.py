@@ -1,10 +1,16 @@
 """ Module to control a Relay by SMS """
+
+# encoding: UTF-8
+
+
 # TODO - Wire the status, and button pins
 # TODO - DO NOT CAPTURE keyboard interupt exceptions
-# TODO - Run the "unescape" code on the Log entries.
 # TODO - Fix "double" "Heater turned off" message bug - May be coming from the push notification number /
 #        allowed_number_interaction
 # TODO - Fix string precision on temperture
+# TODO - Make sure strings can handle unicode
+# TODO - Make commands and help response customizable for Localization
+# TODO - Separate logs for the sensors
 import time
 import subprocess
 import Queue
@@ -159,7 +165,6 @@ class RelayController(object):
         """ Initialize the object. """
         self.configuration = configuration
         self.logger = logger
-        self.last_number = None
         self.gas_detected = False
         serial_connection = self.initialize_modem()
         if serial_connection is None and not local_debug.is_debug():
@@ -221,9 +226,9 @@ class RelayController(object):
         for phone_number in self.configuration.allowed_phone_numbers:
             self.queue_message(phone_number, message)
 
-        if not self.is_allowed_phone_number(self.configuration.push_notification_number):
+        if not self.is_allowed_phone_number(self.push_notification_number()):
             self.queue_message(
-                self.configuration.push_notification_number, message)
+                self.push_notification_number(), message)
 
     def send_message(self, phone_number, message):
         """
@@ -243,14 +248,14 @@ class RelayController(object):
     def log_info_message(self, message_to_log):
         """ Log and print at Info level """
         print "LOG:" + message_to_log.replace("\n", "\\n").replace("\r", "\\r")
-        self.logger.info(message_to_log)
+        self.logger.info(Fona.escape(message_to_log))
 
         return message_to_log
 
     def log_warning_message(self, message_to_log):
         """ Log and print at Warning level """
         print "WARN:" + message_to_log
-        self.logger.warning(message_to_log)
+        self.logger.warning(Fona.escape(message_to_log))
 
         return message_to_log
 
@@ -258,9 +263,6 @@ class RelayController(object):
         """
         Returns a phone number to return command responses back to.
         """
-        if self.last_number is not None:
-            return self.last_number
-
         if self.configuration.push_notification_number is not None:
             return self.configuration.push_notification_number
 
@@ -399,7 +401,7 @@ class RelayController(object):
                 self.log_warning_message(
                     "Issue turning on Heater")
 
-    def process_message(self, message, phone_number=False):
+    def process_message(self, message, phone_number):
         """
         Process a SMS message/command.
         """
@@ -413,24 +415,30 @@ class RelayController(object):
         if not self.is_allowed_phone_number(phone_number):
             unauth_message = "Received unauthorized SMS from " + phone_number
             self.queue_message(
-                self.push_notification_number, unauth_message)
+                self.push_notification_number(), unauth_message)
             return self.log_warning_message(unauth_message)
+
+        if len(phone_number) < 7:
+            invalid_number_message = "Attempt from invalid phone number " + phone_number + " received."
+            self.queue_message(
+                self.push_notification_number(), invalid_number_message)
+            return self.log_warning_message(invalid_number_message)
+
+        message_length = len(message)
+        if message_length < 1 or message_length > 32:
+            invalid_message = "Message was invalid length."
+            self.queue_message(
+                phone_number, invalid_message)
+            return self.log_warning_message(invalid_message)
 
         command_response = self.get_command_response(
             message, phone_number)
         self.execute_command(command_response)
 
-        if phone_number:
-            self.last_number = phone_number
-
-        if phone_number is not None:
-            self.queue_message(
-                phone_number, command_response.get_message())
-            self.log_info_message(
-                "Sent message: " + command_response.get_message() + " to " + phone_number)
-        else:
-            self.log_warning_message(
-                "Phone number missing, unable to send response:" + command_response.get_message())
+        self.queue_message(
+            phone_number, command_response.get_message())
+        self.log_info_message(
+            "Sent message: " + command_response.get_message() + " to " + phone_number)
 
         return command_response.get_message()
 
@@ -510,12 +518,11 @@ class RelayController(object):
                     self.configuration.cell_baud_rate)
             except:
                 print "ERROR"
-                self.log_info_message(
-                    self.log_warning_message(
-                        "SERIAL DEVICE NOT LOCATED."
-                        + " Try changing /dev/ttyUSB0 to different USB port"
-                        + " (like /dev/ttyUSB1) in configuration file or"
-                        + " check to make sure device is connected correctly"))
+                self.log_warning_message(
+                    "SERIAL DEVICE NOT LOCATED."
+                    + " Try changing /dev/ttyUSB0 to different USB port"
+                    + " (like /dev/ttyUSB1) in configuration file or"
+                    + " check to make sure device is connected correctly")
 
                 # wait 60 seconds and check again
                 time.sleep(seconds_between_retries)
