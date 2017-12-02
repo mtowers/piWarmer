@@ -324,7 +324,6 @@ class RelayController(object):
 
         if self.heater_relay.get_status() == 1:
             try:
-                self.heater_queue.put(OFF)
                 return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
                                                        "Turning heater off...")
             except:
@@ -382,17 +381,17 @@ class RelayController(object):
                 self.shutdown()
             except:
                 self.log_warning_message(
-                    "Issue shutting down Raspberry Pi")
+                    "CR: Issue shutting down Raspberry Pi")
         elif command_response.get_command() == CommandResponse.HEATER_OFF:
             try:
-                self.log_info_message("Heater turned OFF")
+                self.log_info_message("CR: Turning heater OFF")
                 self.heater_queue.put(OFF)
             except:
                 self.log_warning_message(
-                    "Issue turning off Heater")
+                    "CR: Issue turning off Heater")
         elif command_response.get_command() == CommandResponse.HEATER_ON:
             try:
-                self.log_info_message("Heater turned ON")
+                self.log_info_message("CR: Turning heater ON")
                 self.heater_queue.put(ON)
             except:
                 self.log_warning_message(
@@ -458,7 +457,7 @@ class RelayController(object):
             return False
 
         while not queue.empty():
-            print "cleared message from queue."
+            self.login_info_message("cleared message from queue.")
             queue.get()
 
     def monitor_gas_sensor(self):
@@ -472,7 +471,7 @@ class RelayController(object):
         detected = self.is_gas_detected()
         current_level = self.mq2_sensor.current_value
 
-        print "Detected: " + str(detected) + ", Level=" + str(current_level)
+        self.log_info_message("Detected: " + str(detected) + ", Level=" + str(current_level))
 
         # If gas is detected, send an immediate warning to
         # all of the phone numberss
@@ -487,11 +486,10 @@ class RelayController(object):
                 # clear the queue if it has a bunch of no warnings in it
 
             self.log_warning_message(status)
-            print "Shoving command into queue"
             self.gas_sensor_queue.put(GAS_WARNING)
             self.heater_queue.put(OFF)
         else:
-            print "Sending OK into queue"
+            self.log_info_message("Sending OK into queue")
             self.gas_sensor_queue.put(GAS_OK)
 
     def initialize_modem(self, retries=4, seconds_between_retries=10):
@@ -506,13 +504,12 @@ class RelayController(object):
 
         while retries > 0 and serial_connection is None:
             try:
-                print "Opening on " + self.configuration.cell_serial_port
+                self.log_info_message("Opening on " + self.configuration.cell_serial_port)
 
                 serial_connection = serial.Serial(
                     self.configuration.cell_serial_port,
                     self.configuration.cell_baud_rate)
             except:
-                print "ERROR"
                 self.log_warning_message(
                     "SERIAL DEVICE NOT LOCATED."
                     + " Try changing /dev/ttyUSB0 to different USB port"
@@ -558,13 +555,13 @@ class RelayController(object):
                 gas_sensor_status = self.gas_sensor_queue.get_nowait()
 
                 if gas_sensor_status is None:
-                    print "Nope"
+                    self.log_warning_message("Gas sensor was None.")
                 else:
-                    print "Q:" + gas_sensor_status
-
-                print "has_been_detected=" + str(self.gas_detected)
+                    self.log_info_message("Q:" + gas_sensor_status)
 
                 self.mq2_sensor.update()
+                self.log_info_message("mq_2_level=" + str(self.mq2_sensor.current_value) + ", has_been_detected=" + \
+                    str(self.gas_detected))
 
                 # print "QUEUE: " + myLEDqstatus
                 if GAS_WARNING in gas_sensor_status:
@@ -579,9 +576,8 @@ class RelayController(object):
                         self.log_warning_message(gas_status)
 
                         self.queue_message_to_all_numbers(gas_status)
-                        print "Would have called. Flag=" + str(self.gas_detected)
+                        self.log_warning_message("Turning detected flag on.")
                         self.gas_detected = True
-                        print "Now the flag is..." + str(self.gas_detected)
 
                     # Force the heater off command no matter
                     # what we think the status is.
@@ -592,7 +588,7 @@ class RelayController(object):
                             str(self.mq2_sensor.current_value)
                         self.log_warning_message(gas_status)
                         self.queue_message_to_all_numbers(gas_status)
-                        print "Flag goes off"
+                        self.log_info_message("Turning detected flag off.")
                         self.gas_detected = False
         except Queue.Empty:
             pass
@@ -603,16 +599,18 @@ class RelayController(object):
         """
         Stops the heater.
         """
-        print "__stop_heater__::switch_low()"
+        self.log_info_message("__stop_heater__::switch_low()")
         self.heater_relay.switch_low()
-        print "__stop_heater__::stop_heater_timer()"
+        self.log_info_message("__stop_heater__::stop_heater_timer()")
         self.stop_heater_timer()
 
     def __start_heater__(self):
         """
         Starts the heater.
         """
+        self.log_info_message("__start_heater__::switch_high()")
         self.heater_relay.switch_high()
+        self.log_info_message("__start_heater__::start_heater_timer()")
         self.start_heater_timer()
 
     def service_heater_queue(self):
@@ -641,16 +639,16 @@ class RelayController(object):
                     self.__start_heater__()
 
                 if OFF in status_queue:
-                    print "Attempting to handle OFF queue event."
+                    self.log_info_message("Attempting to handle OFF queue event.")
                     self.queue_message_to_all_numbers("Heater turned off.")
-                    print "STOP MSG queued, stopping."
+                    self.log_info_message("STOP MSG queued, stopping.")
                     self.__stop_heater__()
 
                 if MAX_TIME in status_queue:
-                    print "Max time reached. Heater turned OFF"
+                    self.log_info_message("Max time reached. Heater turned OFF")
                     self.queue_message_to_all_numbers(
                         "Heater was turned off due to max time being reached")
-                    print "MAX MSG queued, stopping,"
+                    self.log_info_message("MAX MSG queued, stopping")
                     self.__stop_heater__()
             except Queue.Empty:
                 pass
@@ -664,6 +662,11 @@ class RelayController(object):
         total_message_count = len(messages)
         messages_processed_count = 0
 
+        # TODO - Do I really want to process all of the pending
+        #        messages? Should we check to see if a mesage
+        #        changes the status of the system and then
+        #        break the processing so the queue can then
+        #        actually change the state?
         if total_message_count > 0:
             # TODO - Sort these messages so they are processed
             # in the order they were sent.
@@ -711,23 +714,22 @@ class RelayController(object):
         other health signals are OK.
         """
 
-        print "monitor_fona_health"
+        self.log_info_message("monitor_fona_health")
         if time.time() > self.__fona_battery_check_timer__:
-            print "Getting CBC"
             cbc = self.fona.get_current_battery_condition()
 
-            print "Build CBC status log"
-            print "GSM Battery at " + str(cbc.get_percent_battery()) + "%"
+            self.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" + \
+                str(cbc.get_capacity_remaining()))
 
             if cbc.is_battery_ok():
                 # All is OK. Check again in 15 minutes
-                print "Battery is OK."
+                self.log_info_message("Battery is OK.")
                 self.__fona_battery_check_timer__ = time.time() + 15 * 60
             else:
-                print "Battery LOW"
                 low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + \
                     str(cbc.get_percent_battery()) + "%"
                 self.queue_message_to_all_numbers(low_battery_message)
+                self.log_warning_message(low_battery_message)
 
                 # Check again in an hour
                 self.__fona_battery_check_timer__ = time.time() + 60 * 60
