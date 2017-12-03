@@ -121,8 +121,8 @@ class RelayController(object):
             return str(int(number_of_minutes)) + " minutes"
 
         self.log_info_message("Checking hours")
-        number_of_hours = number_of_minutes / 60
-        self.log_info_message("Total=" + str(round(number_of_hours,1)))
+        number_of_hours = round(number_of_minutes / 60.0, 1)
+        self.log_info_message("Total=" + str(number_of_hours))
 
         if number_of_hours < 24:
             return str(number_of_hours) + " hours"

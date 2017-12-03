@@ -663,9 +663,9 @@ if __name__ == '__main__':
 
     # fona.get_carrier()
     BATTERY_CONDITION = FONA.get_current_battery_condition()
-    # FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
-    #                   str(BATTERY_CONDITION.battery_percent)
-    #                   + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
+    FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
+                       str(BATTERY_CONDITION.battery_percent)
+                       + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
     # print "Signal strength:"
     SIGNAL_STRENGTH = FONA.get_signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
