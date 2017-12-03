@@ -1,18 +1,21 @@
 '''
-This code is basically an adaptation of the Arduino_TSL2591 library from 
+This code is basically an adaptation of the Arduino_TSL2591 library from
 adafruit: https://github.com/adafruit/Adafruit_TSL2591_Library
 
-for configuring I2C in a raspberry 
+for configuring I2C in a raspberry
 https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-i2c
 
-datasheet: 
+datasheet:
 http://ams.com/eng/Products/Light-Sensors/Light-to-Digital-Sensors/TSL25911
 
 Taken from https://github.com/maxlklaxl/python-tsl2591/blob/master/tsl2591/read_tsl.py
 
 '''
-import smbus
+
 import time
+import local_debug
+if not local_debug.is_debug():
+    import smbus
 
 VISIBLE = 2  # channel 0 - channel 1
 INFRARED = 1  # channel 1
@@ -61,14 +64,19 @@ GAIN_MAX = 0x30  # max gain (9876x)
 
 
 class LightSensor(object):
+    """
+    Object to handle the Adafruit light sensor.
+    """
     def __init__(
-                 self,
-                 i2c_bus=1,
-                 sensor_address=0x29,
-                 integration=INTEGRATIONTIME_100MS,
-                 gain=GAIN_LOW
-                 ):
-        self.bus = smbus.SMBus(i2c_bus)
+            self,
+            i2c_bus=1,
+            sensor_address=0x29,
+            integration=INTEGRATIONTIME_100MS,
+            gain=GAIN_LOW
+    ):
+        if not local_debug.is_debug():
+            self.bus = smbus.SMBus(i2c_bus)
+
         self.sendor_address = sensor_address
         self.integration_time = integration
         self.gain = gain
@@ -79,11 +87,12 @@ class LightSensor(object):
     def set_timing(self, integration):
         self.enable()
         self.integration_time = integration
-        self.bus.write_byte_data(
-                    self.sendor_address,
-                    COMMAND_BIT | REGISTER_CONTROL,
-                    self.integration_time | self.gain
-                    )
+        if not local_debug.is_debug():
+            self.bus.write_byte_data(
+                self.sendor_address,
+                COMMAND_BIT | REGISTER_CONTROL,
+                self.integration_time | self.gain
+            )
         self.disable()
 
     def get_timing(self):
@@ -92,21 +101,25 @@ class LightSensor(object):
     def set_gain(self, gain):
         self.enable()
         self.gain = gain
-        self.bus.write_byte_data(
-                    self.sendor_address,
-                    COMMAND_BIT | REGISTER_CONTROL,
-                    self.integration_time | self.gain
-                    )
+        if not local_debug.is_debug():
+            self.bus.write_byte_data(
+                self.sendor_address,
+                COMMAND_BIT | REGISTER_CONTROL,
+                self.integration_time | self.gain
+            )
         self.disable()
 
     def get_gain(self):
+        """
+        Returns the gain being used by the sensor.
+        """
         return self.gain
 
     def calculate_lux(self, full, ir):
         # Check for overflow conditions first
         if (full == 0xFFFF) | (ir == 0xFFFF):
             return 0
-            
+
         case_integ = {
             INTEGRATIONTIME_100MS: 100.,
             INTEGRATIONTIME_200MS: 200.,
@@ -114,7 +127,7 @@ class LightSensor(object):
             INTEGRATIONTIME_400MS: 400.,
             INTEGRATIONTIME_500MS: 500.,
             INTEGRATIONTIME_600MS: 600.,
-            }
+        }
         if self.integration_time in case_integ.keys():
             atime = case_integ[self.integration_time]
         else:
@@ -125,7 +138,7 @@ class LightSensor(object):
             GAIN_MED: 25.,
             GAIN_HIGH: 428.,
             GAIN_MAX: 9876.,
-            }
+        }
 
         if self.gain in case_gain.keys():
             again = case_gain[self.gain]
@@ -142,30 +155,37 @@ class LightSensor(object):
         return max([lux1, lux2])
 
     def enable(self):
-        self.bus.write_byte_data(
-                    self.sendor_address,
-                    COMMAND_BIT | REGISTER_ENABLE,
-                    ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
-                    )  # Enable
+        if not local_debug.is_debug():
+            self.bus.write_byte_data(
+                self.sendor_address,
+                COMMAND_BIT | REGISTER_ENABLE,
+                ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
+            )  # Enable
 
     def disable(self):
-        self.bus.write_byte_data(
-                    self.sendor_address,
-                    COMMAND_BIT | REGISTER_ENABLE,
-                    ENABLE_POWEROFF
-                    )
+        if not local_debug.is_debug():
+            self.bus.write_byte_data(
+                self.sendor_address,
+                COMMAND_BIT | REGISTER_ENABLE,
+                ENABLE_POWEROFF
+            )
 
     def get_full_luminosity(self):
         self.enable()
-        time.sleep(0.120*self.integration_time+1)  # not sure if we need it "// Wait x ms for ADC to complete"
-        full = self.bus.read_word_data(
-                    self.sendor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
-                    )
-        ir = self.bus.read_word_data(
-                    self.sendor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
-                    )                    
-        self.disable()
-        return full, ir
+        # not sure if we need it "// Wait x ms for ADC to complete"
+        time.sleep(0.120 * self.integration_time + 1)
+
+        if not local_debug.is_debug():
+            full = self.bus.read_word_data(
+                self.sendor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
+            )
+            ir = self.bus.read_word_data(
+                self.sendor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
+            )
+            self.disable()
+            return full, ir
+
+        return 0, 0
 
     def get_luminosity(self, channel):
         full, ir = self.get_full_luminosity()
@@ -178,8 +198,9 @@ class LightSensor(object):
         elif channel == VISIBLE:
             # Reads all and subtracts out ir to give just the visible!
             return full - ir
-        else: # unknown channel!
-            return 0
+
+        # unknown channel!
+        return 0
 
 
 class LightSensorResult(object):
@@ -202,12 +223,11 @@ class LightSensorResult(object):
 
 if __name__ == '__main__':
 
-    tsl = LightSensor()  # initialize
+    TSL = LightSensor()  # initialize
 
 #    tsl.set_gain(GAIN_MED)
 #    tsl.set_timing(INTEGRATIONTIME_100MS)
 
     while True:
-        result = LightSensorResult(tsl)
-        print "Lux=" + str(result.lux)
-
+        RESULT = LightSensorResult(TSL)
+        print "Lux=" + str(RESULT.lux)

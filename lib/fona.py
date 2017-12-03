@@ -1,12 +1,10 @@
 """
 Module to help with tha AdaFruit Fona modules
 """
-# TODO - Need to wire the GPIO to the Fona to turn itself on
-# TODO - Could wire to the fona for a status/waiting bit
 import time
 import threading
-import local_debug
 from multiprocessing import Queue as MPQueue
+import local_debug
 
 if not local_debug.is_debug():
     import RPi.GPIO as GPIO
@@ -16,8 +14,8 @@ BATTERY_CRITICAL = 40
 BATTERY_WARNING = 60
 DEFAULT_RESPONSE_READ_TIMEOUT = 5
 
-DEFAULT_RING_INDICATOR_PIN = 18 # (Physical... GPIO24)
-DEFAULT_POWER_STATUS_PIN = 16 # (Physical ..GPIO23)
+DEFAULT_RING_INDICATOR_PIN = 18  # (Physical... GPIO24)
+DEFAULT_POWER_STATUS_PIN = 16  # (Physical ..GPIO23)
 
 
 def escape(text):
@@ -221,10 +219,10 @@ class Fona(object):
     unauthorize numbers
     """
 
-    def __init__(self, ser, \
-            power_status_pin, \
-            ring_indicator_pin, \
-            allowednumbers):
+    def __init__(self, ser,
+                 power_status_pin,
+                 ring_indicator_pin,
+                 allowednumbers):
         self.command_history = []
         self.serial_connection = ser
         self.power_status_pin = power_status_pin
@@ -270,12 +268,13 @@ class Fona(object):
         # a text message is received
         self.send_command("AT+CFGRI=1")
 
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BOARD)
-        GPIO.setup(self.ring_indicator_pin, GPIO.IN)
-        GPIO.setup(self.power_status_pin, GPIO.IN)
-        GPIO.add_event_detect(self.ring_indicator_pin, GPIO.RISING, self.ring_indicator_pulsed)
-
+        if not local_debug.is_debug():
+            GPIO.setwarnings(False)
+            GPIO.setmode(GPIO.BOARD)
+            GPIO.setup(self.ring_indicator_pin, GPIO.IN)
+            GPIO.setup(self.power_status_pin, GPIO.IN)
+            GPIO.add_event_detect(self.ring_indicator_pin,
+                                GPIO.RISING, self.ring_indicator_pulsed)
 
         return True
 
@@ -299,15 +298,15 @@ class Fona(object):
         """
 
         print "is_power_on()"
-        if self.__use_gpio_pins__():
+        if self.__use_gpio_pins__() and not local_debug.is_debug():
             pin_value = GPIO.input(self.power_status_pin)
             print "Power... PIN=" + str(self.power_status_pin) + ", VAL=" + str(pin_value)
-            return GPIO.input(self.power_status_pin) == GPIO.HIGH 
+            return GPIO.input(self.power_status_pin) == GPIO.HIGH
 
         # If we are not using the power pins
         # then use the existance of the serial
         # modem connection
-        return self.ser is not None
+        return self.serial_connection is not None
 
     def write_to_fona(self,
                       text):
@@ -644,7 +643,7 @@ if __name__ == '__main__':
     import serial
 
     if not local_debug.is_debug():
-        PHONE_NUMBER = "2066795094" # input("Phone number>")
+        PHONE_NUMBER = "2066795094"  # input("Phone number>")
     else:
         PHONE_NUMBER = "2061234567"
 

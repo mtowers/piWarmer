@@ -1,7 +1,6 @@
 """
 Module to handle sending commands to the power relay.
 """
-import subprocess
 import time
 import local_debug
 
@@ -24,7 +23,7 @@ class PowerRelay(object):
 
     def __init__(self, name, GPIO_PIN, relay_type=DEFAULT_RELAY_TYPE):
         """
-        Return a relay object whose name is  *name*.
+        Creates a relay controller.
         """
         self.name = name
         self.gpio_pin = GPIO_PIN

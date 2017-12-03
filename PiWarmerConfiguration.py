@@ -2,11 +2,11 @@
 
 # encoding: UTF-8
 
-from sys import platform
 from ConfigParser import SafeConfigParser
 import lib.local_debug as local_debug
 
 # read in configuration settings
+
 
 def get_config_file_location():
     """

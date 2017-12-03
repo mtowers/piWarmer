@@ -105,8 +105,11 @@ class RelayController(object):
 
         self.log_info_message("Total=" + str(number_of_seconds))
 
+        if number_of_seconds <= 0:
+            return "No time"
+
         if number_of_seconds < 60:
-            self.log_info_mesasge("Returning seconds")
+            self.log_info_message("Returning seconds")
             return str(int(number_of_seconds)) + " seconds"
 
         self.log_info_message("Checking minutes")
@@ -118,13 +121,13 @@ class RelayController(object):
             return str(int(number_of_minutes)) + " minutes"
 
         self.log_info_message("Checking hours")
-        number_hours = number_of_minutes / 60
-        self.log_info_message("Total=" + str(number_of_hours))
+        number_of_hours = number_of_minutes / 60
+        self.log_info_message("Total=" + str(round(number_of_hours,1)))
 
         if number_of_hours < 24:
             return str(number_of_hours) + " hours"
 
-        number_days = number_of_hours / 24
+        number_of_days = round(number_of_hours / 24.0, 1)
 
         return str(number_of_days) + " days"
 
@@ -145,16 +148,14 @@ class RelayController(object):
             time_remaining = self.get_time_text(delta_time)
             self.log_info_message("Got the text")
         else:
-            selof.log_info_message("No time")
+            self.log_info_message("No time")
             time_remaining = "No time"
-
 
         self.log_info_message("adding remaining")
         time_remaining += " remaining."
 
         self.log_info_message("Done")
         return time_remaining
-
 
     def __get_heater_status__(self):
         """
@@ -202,7 +203,8 @@ class RelayController(object):
         if self.light_sensor is not None:
             results = LightSensorResult(self.light_sensor)
 
-            status = "Hangar has " + str(int(results.lux)) + " lumens of light.\n"
+            status = "Hangar has " + \
+                str(int(results.lux)) + " lumens of light.\n"
             status += "Hangar is "
             brightness = "Bright. Did you leave the lights on?"
 
@@ -216,8 +218,7 @@ class RelayController(object):
             status += brightness
 
             return status
-                
-        
+
         return "Light sensor not enabled."
 
     def __get_status__(self):
@@ -305,7 +306,8 @@ class RelayController(object):
         Puts a request to send a message into the queue.
         """
         if self.message_send_queue is not None and phone_number is not None and message is not None:
-            self.log_info_message("MSG - " + phone_number + " : " + Fona.escape(message))
+            self.log_info_message(
+                "MSG - " + phone_number + " : " + Fona.escape(message))
             self.message_send_queue.put(
                 MessageSendRequest(phone_number, message))
 
@@ -393,7 +395,8 @@ class RelayController(object):
 
         if self.heater_relay.get_status() == 1:
             return CommandResponse.CommandResponse(CommandResponse.NOOP,
-                                                   "Heater is already ON, " + self.get_heater_time_remaining())
+                                                   "Heater is already ON, "
+                                                   + self.get_heater_time_remaining())
 
         if self.is_gas_detected():
             return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
@@ -412,7 +415,8 @@ class RelayController(object):
         if self.heater_relay.get_status() == 1:
             try:
                 return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
-                                                       "Turning heater off with " + self.get_heater_time_remaining())
+                                                       "Turning heater off with "
+                                                       + self.get_heater_time_remaining())
             except:
                 return CommandResponse.CommandResponse(CommandResponse.ERROR,
                                                        "Issue turning Heater OFF")
@@ -514,7 +518,8 @@ class RelayController(object):
             return self.log_warning_message(unauth_message)
 
         if len(phone_number) < 7:
-            invalid_number_message = "Attempt from invalid phone number " + phone_number + " received."
+            invalid_number_message = "Attempt from invalid phone number " + \
+                phone_number + " received."
             self.queue_message_to_all_numbers(invalid_number_message)
             return self.log_warning_message(invalid_number_message)
 
@@ -572,7 +577,7 @@ class RelayController(object):
             return False
 
         while not queue.empty():
-            self.login_info_message("cleared message from queue.")
+            self.log_info_message("cleared message from queue.")
             queue.get()
 
     def monitor_gas_sensor(self):
@@ -588,7 +593,8 @@ class RelayController(object):
         detected = self.is_gas_detected()
         current_level = self.mq2_sensor.current_value
 
-        self.log_info_message("Detected: " + str(detected) + ", Level=" + str(current_level))
+        self.log_info_message("Detected: " + str(detected) +
+                              ", Level=" + str(current_level))
 
         # If gas is detected, send an immediate warning to
         # all of the phone numberss
@@ -623,7 +629,8 @@ class RelayController(object):
 
         while retries > 0 and serial_connection is None:
             try:
-                self.log_info_message("Opening on " + self.configuration.cell_serial_port)
+                self.log_info_message(
+                    "Opening on " + self.configuration.cell_serial_port)
 
                 serial_connection = serial.Serial(
                     self.configuration.cell_serial_port,
@@ -679,8 +686,9 @@ class RelayController(object):
                     self.log_info_message("Q:" + gas_sensor_status, False)
 
                 self.mq2_sensor.update()
-                self.log_info_message("mq_2_level=" + str(self.mq2_sensor.current_value) + ", has_been_detected=" + \
-                    str(self.gas_detected), self.gas_detected)
+                self.log_info_message("mq_2_level=" + str(self.mq2_sensor.current_value)
+                                      + ", has_been_detected="
+                                      + str(self.gas_detected), self.gas_detected)
 
                 # print "QUEUE: " + myLEDqstatus
                 if GAS_WARNING in gas_sensor_status:
@@ -758,13 +766,15 @@ class RelayController(object):
                     self.__start_heater__()
 
                 if OFF in status_queue:
-                    self.log_info_message("Attempting to handle OFF queue event.")
+                    self.log_info_message(
+                        "Attempting to handle OFF queue event.")
                     self.queue_message_to_all_numbers("Heater turned off.")
                     self.log_info_message("STOP MSG queued, stopping.")
                     self.__stop_heater__()
 
                 if MAX_TIME in status_queue:
-                    self.log_info_message("Max time reached. Heater turned OFF")
+                    self.log_info_message(
+                        "Max time reached. Heater turned OFF")
                     self.queue_message_to_all_numbers(
                         "Heater was turned off due to max time being reached")
                     self.log_info_message("MAX MSG queued, stopping")
@@ -843,8 +853,8 @@ class RelayController(object):
             self.log_info_message("monitor_fona_health")
             cbc = self.fona.get_current_battery_condition()
 
-            self.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" + \
-                str(cbc.get_capacity_remaining()))
+            self.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" +
+                                  str(cbc.get_capacity_remaining()))
 
             if cbc.is_battery_ok():
                 # All is OK. Check again in 15 minutes
@@ -873,7 +883,8 @@ class RelayController(object):
             print "Stopping due to CTRL+C"
             exit()
         except:
-            self.log_warning_message("Exception while servicing " + service_name)
+            self.log_warning_message(
+                "Exception while servicing " + service_name)
             print "Error:", sys.exc_info()[0]
 
     def run_pi_warmer(self):
@@ -889,10 +900,14 @@ class RelayController(object):
 
         while True:
             self.run_servicer(self.monitor_fona_health, "Battery check")
-            self.run_servicer(self.service_gas_sensor_queue, "Gas sensor queue")
-            self.run_servicer(self.service_heater_queue, "Heater request queue")
-            self.run_servicer(self.process_pending_text_messages, "Incoming request queue")
-            self.run_servicer(self.process_message_send_requests, "Outgoing requeust queue")
+            self.run_servicer(self.service_gas_sensor_queue,
+                              "Gas sensor queue")
+            self.run_servicer(self.service_heater_queue,
+                              "Heater request queue")
+            self.run_servicer(self.process_pending_text_messages,
+                              "Incoming request queue")
+            self.run_servicer(self.process_message_send_requests,
+                              "Outgoing requeust queue")
 
 
 #############
@@ -909,6 +924,26 @@ if __name__ == '__main__':
     CONFIG = PiWarmerConfiguration.PiWarmerConfiguration()
 
     CONTROLLER = RelayController(CONFIG, logging.getLogger("Controller"))
+
+    print CONTROLLER.get_time_text(-1)
+    print CONTROLLER.get_time_text(0)
+    print CONTROLLER.get_time_text(1)
+    print CONTROLLER.get_time_text(30)
+    print CONTROLLER.get_time_text(59)
+    print CONTROLLER.get_time_text(60)
+    print CONTROLLER.get_time_text(90)
+    print CONTROLLER.get_time_text(600)
+    print CONTROLLER.get_time_text((60 * 60) - 1)
+    print CONTROLLER.get_time_text(60 * 60)
+    print CONTROLLER.get_time_text((60 * 60) + 1)
+    print CONTROLLER.get_time_text((60 * 60) * 1.5)
+    print CONTROLLER.get_time_text((60 * 60) * 2)
+    print CONTROLLER.get_time_text((60 * 60) * 23)
+    print CONTROLLER.get_time_text((60 * 60) * 24)
+    print CONTROLLER.get_time_text((60 * 60) * 36)
+    print CONTROLLER.get_time_text((60 * 60) * 36.1234)
+    print CONTROLLER.get_time_text((60 * 60) * 48)
+
 
     CONTROLLER.run_pi_warmer()
 
