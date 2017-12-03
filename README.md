@@ -8,6 +8,8 @@ This version was based on [https://github.com/mdegrazia/piWarmer](https://github
 
 I want to extend my many thanks to Maria for starting such an amazing project
 
+The light sensor code is from "arenadorn" and [tsl2591](https://github.com/maxlklaxl/python-tsl2591/blob/master/tsl2591/read_tsl.py)
+
 ## Disclaimer
 
 ****piWarmer is to be used at your own risk****
