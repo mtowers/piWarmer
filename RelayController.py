@@ -2,15 +2,13 @@
 
 # encoding: UTF-8
 
-# TODO - DO NOT CAPTURE keyboard interupt exceptions
-# TODO - Fix string precision on temperture
 # TODO - Make sure strings can handle unicode
 # TODO - Make commands and help response customizable for Localization
 # TODO - Separate logs for the sensors
 # TODO - Add a restart command
-# TODO - Add an "Uptime" status
 # TODO - Make "Quit" work
 
+import sys
 import time
 import threading
 import subprocess
@@ -23,6 +21,7 @@ import lib.fona as Fona
 from lib.relay import PowerRelay
 import lib.temp_probe as temp_probe
 import lib.local_debug as local_debug
+from lib.light_sensor import LightSensor, LightSensorResult
 
 
 OFF = "Off"
@@ -96,7 +95,7 @@ class RelayController(object):
             if sensor_readings is None or len(sensor_readings) < 1:
                 return "Temp probe enabled, but not found."
 
-            return "Temperature is " + str(sensor_readings[0]) + "F"
+            return "Temperature is " + str(int(sensor_readings[0])) + "F"
 
         return "Temp probe not enabled."
 
@@ -105,15 +104,23 @@ class RelayController(object):
         Returns the amount of time in the appropriate unit.
         """
 
-        if number_of_seconds < 60:
-            return str(number_of_seconds) + " seconds"
+        self.log_info_message("Total=" + str(number_of_seconds))
 
+        if number_of_seconds < 60:
+            self.log_info_mesasge("Returning seconds")
+            return str(int(number_of_seconds)) + " seconds"
+
+        self.log_info_message("Checking minutes")
         number_of_minutes = number_of_seconds / 60
 
-        if number_of_minutes < 60:
-            return str(number_of_minutes) + " minutes"
+        self.log_info_message("Total=" + str(number_of_minutes))
 
+        if number_of_minutes < 60:
+            return str(int(number_of_minutes)) + " minutes"
+
+        self.log_info_message("Checking hours")
         number_hours = number_of_minutes / 60
+        self.log_info_message("Total=" + str(number_of_hours))
 
         if number_of_hours < 24:
             return str(number_of_hours) + " hours"
@@ -121,6 +128,34 @@ class RelayController(object):
         number_days = number_of_hours / 24
 
         return str(number_of_days) + " days"
+
+    def get_heater_time_remaining(self):
+        """
+        Returns a string saying how much time is left
+        for the heater.
+        """
+
+        self.log_info_message("get_heater_time_remaining()")
+
+        time_remaining = ""
+
+        if self.__heater_shutoff_timer__ is not None:
+            self.log_info_message("timer is not None")
+            delta_time = self.__heater_shutoff_timer__ - time.time()
+            self.log_info_message("Got the delta")
+            time_remaining = self.get_time_text(delta_time)
+            self.log_info_message("Got the text")
+        else:
+            selof.log_info_message("No time")
+            time_remaining = "No time"
+
+
+        self.log_info_message("adding remaining")
+        time_remaining += " remaining."
+
+        self.log_info_message("Done")
+        return time_remaining
+
 
     def __get_heater_status__(self):
         """
@@ -133,11 +168,7 @@ class RelayController(object):
 
         if self.heater_relay.get_status() == 1:
             status_text += "ON. "
-            if self.__heater_shutoff_timer__ is not None:
-                status_text += get_time_text(self.__heater_shutoff_timer__ - time.time())
-                status_text += " remaining."
-            else:
-                status_text += "Unknown time left."
+            status_text += self.get_heater_time_remaining()
         else:
             status_text += "OFF"
 
@@ -164,13 +195,47 @@ class RelayController(object):
 
         return status
 
+    def __get_light_status__(self):
+        """
+        Classifies the hangar brightness.
+        """
+
+        if self.light_sensor is not None:
+            results = LightSensorResult(self.light_sensor)
+
+            status = "Hangar has " + str(int(results.lux)) + " lumens of light.\n"
+            status += "Hangar is "
+            brightness = "Bright. Did you leave the lights on?"
+
+            if results.lux <= self.configuration.hangar_dark:
+                brightness = "dark."
+            elif results.lux <= self.configuration.hangar_dim:
+                brightness = "dim."
+            elif results.lux <= self.configuration.hangar_lit:
+                brightness = "lit."
+
+            status += brightness
+
+            return status
+                
+        
+        return "Light sensor not enabled."
+
     def __get_status__(self):
         """
         Returns the status of the piWarmer.
         """
 
-        status = self.__get_heater_status__() + "\n" + self.__get_gas_sensor_status__() + "\n"
-        status += self.__get_temp_probe_status__() + "\n" + self.__get_fona_status__()
+        uptime = time.time() - self.__system_start_time__
+
+        status = self.__get_heater_status__() + "\n"
+        status += self.__get_gas_sensor_status__() + "\n"
+        status += self.__get_light_status__() + "\n"
+        status += self.__get_temp_probe_status__() + "\n"
+        status += self.__get_fona_status__()
+
+        if uptime > 60:
+            status += "\nSystem has been up for " + self.get_time_text(uptime)
 
         return status
 
@@ -186,13 +251,18 @@ class RelayController(object):
 
     def __init__(self, configuration, logger):
         """ Initialize the object. """
+        self.__system_start_time__ = time.time()
         self.configuration = configuration
         self.logger = logger
         self.gas_detected = False
+        self.light_sensor = None
+        if self.configuration.is_light_sensor_enabled:
+            self.light_sensor = LightSensor()
+
         serial_connection = self.initialize_modem()
         if serial_connection is None and not local_debug.is_debug():
             print "Nope"
-            exit()
+            sys.exit()
 
         self.fona = Fona.Fona(serial_connection,
                               self.configuration.cell_power_status_pin,
@@ -213,7 +283,7 @@ class RelayController(object):
 
         if self.fona is None and not local_debug.is_debug():
             self.log_warning_message("Uable to initialize, quiting.")
-            exit()
+            sys.exit()
 
         # make sure and turn heater off
         self.heater_relay.switch_low()
@@ -324,7 +394,7 @@ class RelayController(object):
 
         if self.heater_relay.get_status() == 1:
             return CommandResponse.CommandResponse(CommandResponse.NOOP,
-                                                   "Heater is already ON")
+                                                   "Heater is already ON, " + self.get_heater_time_remaining())
 
         if self.is_gas_detected():
             return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
@@ -343,7 +413,7 @@ class RelayController(object):
         if self.heater_relay.get_status() == 1:
             try:
                 return CommandResponse.CommandResponse(CommandResponse.HEATER_OFF,
-                                                       "Turning heater off...")
+                                                       "Turning heater off with " + self.get_heater_time_remaining())
             except:
                 return CommandResponse.CommandResponse(CommandResponse.ERROR,
                                                        "Issue turning Heater OFF")
@@ -376,7 +446,7 @@ class RelayController(object):
         elif "off" in message:
             return self.handle_off_request(phone_number)
         elif "quit" in message:
-            exit()
+            sys.exit()
         elif "status" in message:
             return self.handle_status_request(phone_number)
         elif "help" in message:
@@ -773,9 +843,11 @@ class RelayController(object):
         try:
             service_callback()
         except KeyboardInterrupt:
-            raise KeyboardInterrupt
+            print "Stopping due to CTRL+C"
+            exit()
         except:
             self.log_warning_message("Exception while servicing " + service_name)
+            print "Error:", sys.exc_info()[0]
 
     def run_pi_warmer(self):
         """
@@ -788,8 +860,6 @@ class RelayController(object):
         # It kicks off every 30 seconds
         self.monitor_gas_sensor()
 
-        # TODO - Make this loop killable by CTRL+C
-        # TODO - Make this code less messy
         while True:
             self.run_servicer(self.monitor_fona_health, "Battery check")
             self.run_servicer(self.service_gas_sensor_queue, "Gas sensor queue")

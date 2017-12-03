@@ -45,17 +45,20 @@ __Note__: GPIO25 is physical pin 22
 
 ### Fona
 
-### Fona Serial/Modem Communication
+#### Fona Serial/Modem Communication
 - TTL Black to Fona "GND"
 - TTL White to Fona "TX"
 - TTL Green to Fona "RX"
 - TTL Red to Fona "Vio"
 - USB to Pi USB
 
-### Fona Status
+#### Fona Status
 - ORANGE Fona PS to GPIO23
 - YELLOW Fona Key to GPIO GND
 - GREEN Fona RI to GPIO24
+
+#### Fona Power... Again
+- USB power into the Fona mini-USB port
 
 __Note__:GPIO23 is physical pin 16
 __Note__:GPIO24 is physical pin 18

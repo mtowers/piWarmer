@@ -60,7 +60,7 @@ GAIN_HIGH = 0x20  # medium gain (428x)
 GAIN_MAX = 0x30  # max gain (9876x)
 
 
-class Tsl2591(object):
+class LightSensor(object):
     def __init__(
                  self,
                  i2c_bus=1,
@@ -182,33 +182,32 @@ class Tsl2591(object):
             return 0
 
 
+class LightSensorResult(object):
+    """
+    Stores the reading of a light sensor.
+    """
+
+    def __init__(self, tsl_sensor):
+        """
+        Reads the sensor and stores the results.
+        """
+
+        full, ir = tsl_sensor.get_full_luminosity()
+        lux = tsl_sensor.calculate_lux(full, ir)
+
+        self.full_spectrum = full
+        self.infrared = ir
+        self.lux = lux
+
+
 if __name__ == '__main__':
 
-    tsl = Tsl2591()  # initialize
-    full, ir = tsl.get_full_luminosity()  # read raw values (full spectrum and ir spectrum)
-    lux = tsl.calculate_lux(full, ir)  # convert raw values to lux
-    print (lux, full, ir)
-    print ()
+    tsl = LightSensor()  # initialize
 
-    def test(int_time=INTEGRATIONTIME_100MS, gain=GAIN_LOW):
-        tsl.set_gain(gain)
-        tsl.set_timing(int_time)
-        full_test, ir_test = tsl.get_full_luminosity()
-        lux_test = tsl.calculate_lux(full_test, ir_test)
-        print ('Lux = %f  full = %i  ir = %i' % (lux_test, full_test, ir_test))
-        print("integration time = %i" % tsl.get_timing())
-        print("gain = %i \n" % tsl.get_gain())        
+#    tsl.set_gain(GAIN_MED)
+#    tsl.set_timing(INTEGRATIONTIME_100MS)
 
-    for i in [INTEGRATIONTIME_100MS,
-              INTEGRATIONTIME_200MS,
-              INTEGRATIONTIME_300MS,
-              INTEGRATIONTIME_400MS,
-              INTEGRATIONTIME_500MS,
-              INTEGRATIONTIME_600MS]:
-        test(i, GAIN_LOW)
+    while True:
+        result = LightSensorResult(tsl)
+        print "Lux=" + str(result.lux)
 
-    for i in [GAIN_LOW,
-              GAIN_MED,
-              GAIN_HIGH,
-              GAIN_MAX]:
-        test(INTEGRATIONTIME_100MS, i)

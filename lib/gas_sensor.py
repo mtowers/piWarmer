@@ -58,7 +58,19 @@ class GasSensor(object):
         self.ic2_bus.write_byte(DEFAULT_IC2_ADDRESS,
                                 read_offset)
 
-        return self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
+        # Needs a "dummy read" for the conversion to happen
+        # The write back needs to compress the range of values
+        # from 0-255 to 125 to 255.
+        # This makes the LED light up
+        self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
+
+        raw_value = self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
+        converted_value = raw_value * (255.0-125.0)/255.0+125.0
+        print "RAW=" + str(raw_value) + ", CONV=" + str(converted_value)
+
+        self.ic2_bus.write_byte_data(DEFAULT_IC2_ADDRESS, 0x40, int(converted_value))
+
+        return raw_value
 
     def get_current_level(self):
         """

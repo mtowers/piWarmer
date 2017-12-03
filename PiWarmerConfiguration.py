@@ -49,6 +49,14 @@ class PiWarmerConfiguration(object):
             'SETTINGS', 'MQ2')
         self.is_temp_probe_enabled = self.__config_parser__.getboolean(
             'SETTINGS', 'TEMP')
+        self.is_light_sensor_enabled = self.__config_parser__.getboolean(
+            'SETTINGS', 'LIGHT_SENSOR')
+        self.hangar_dark = self.__config_parser__.getint(
+            'SETTINGS', 'HANGAR_DARK')
+        self.hangar_dim = self.__config_parser__.getint(
+            'SETTINGS', 'HANGAR_DIM')
+        self.hangar_lit = self.__config_parser__.getint(
+            'SETTINGS', 'HANGAR_LIT')
         self.allowed_phone_numbers = self.__config_parser__.get(
             'SETTINGS', 'ALLOWED_PHONE_NUMBERS')
         self.allowed_phone_numbers = self.allowed_phone_numbers.split(',')
