@@ -8,6 +8,8 @@ https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configurin
 datasheet: 
 http://ams.com/eng/Products/Light-Sensors/Light-to-Digital-Sensors/TSL25911
 
+Taken from https://github.com/maxlklaxl/python-tsl2591/blob/master/tsl2591/read_tsl.py
+
 '''
 import smbus
 import time
