@@ -5,7 +5,6 @@
 # TODO - Make sure strings can handle unicode
 # TODO - Make commands and help response customizable for Localization
 # TODO - Separate logs for the sensors
-# TODO - Add a restart command
 # TODO - Make "Quit" work
 
 import sys
@@ -299,7 +298,7 @@ class RelayController(object):
         """
         Returns the message for help.
         """
-        return "To control the piWarmer text ON, OFF, STATUS, HELP, or SHUTDOWN"
+        return "To control the piWarmer text ON, OFF, STATUS, HELP, QUIT, RESTART, or SHUTDOWN"
 
     def queue_message(self, phone_number, message):
         """
@@ -451,6 +450,10 @@ class RelayController(object):
             return self.handle_status_request(phone_number)
         elif "help" in message:
             return self.handle_help_request(phone_number)
+        elif "restart" in message:
+            self.log_info_message("Go restart request")
+            return CommandResponse.CommandResponse(CommandResponse.PI_WARMER_RESTART,
+                                                   "Restart request from " + phone_number)
         elif "shutdown" in message:
             return CommandResponse.CommandResponse(CommandResponse.PI_WARMER_OFF,
                                                    "Received SHUTDOWN request from " + phone_number)
@@ -470,6 +473,15 @@ class RelayController(object):
             except:
                 self.log_warning_message(
                     "CR: Issue shutting down Raspberry Pi")
+        self.log_info_message("Checking if restart")
+        if command_response.get_command() == CommandResponse.PI_WARMER_RESTART:
+            try:
+                self.log_info_message("Attempting restart")
+                self.restart()
+                self.log_info_message("Should have restarted...")
+            except:
+                self.log_warning_message(
+                    "CR: Issue restarting")
         elif command_response.get_command() == CommandResponse.HEATER_OFF:
             try:
                 self.log_info_message("CR: Turning heater OFF")
@@ -515,7 +527,9 @@ class RelayController(object):
 
         command_response = self.get_command_response(
             message, phone_number)
+        self.log_info_message("Got command response")
         self.execute_command(command_response)
+        self.log_info_message("executed command.")
 
         self.queue_message(
             phone_number, command_response.get_message())
@@ -523,6 +537,19 @@ class RelayController(object):
             "Sent message: " + command_response.get_message() + " to " + phone_number)
 
         return command_response.get_message()
+
+    def restart(self):
+        """
+        Restarts the Pi
+        """
+        self.log_info_message("RESTARTING. Turning off relay")
+        self.heater_relay.switch_low()
+
+        if not local_debug.is_debug():
+            self.log_info_message("Calling SUDO SHUTDOWN.")
+            subprocess.Popen(["sudo shutdown -r now"],
+                             shell=True, stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
 
     def shutdown(self):
         """
@@ -533,7 +560,7 @@ class RelayController(object):
 
         self.log_info_message("SHUTDOWN: Shutting down piWarmer.")
         if not local_debug.is_debug():
-            subprocess.Popen(["sudo shutdown -P now " + str(self.configuration.heater_pin)],
+            subprocess.Popen(["sudo shutdown -P now"],
                              shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
 
