@@ -9,7 +9,7 @@ if not local_debug.is_debug():
     import RPi.GPIO as GPIO
 
 DEFAULT_RELAY_TYPE = "always_off"
-DEFAULT_GPIO_PIN = 18
+DEFAULT_PIN = 22
 
 
 class PowerRelay(object):
@@ -18,7 +18,7 @@ class PowerRelay(object):
 
     Attributes:
     name: Relay name (IE - Heater, Light, etc.
-    GPIO_PIN: BCM GPIO PIN on rasperry pi that
+    GPIO_PIN: (BOARD) GPIO PIN on rasperry pi that
     the AC/D control relay is plugged into
     """
 
@@ -34,10 +34,10 @@ class PowerRelay(object):
         # setup GPIO Pins
 
         if not local_debug.is_debug():
-            print "Setting " + str(GPIO_PIN) + " to BCM/OUT"
+            print "Setting " + str(GPIO_PIN) + " to BOARD/OUT"
             self.expected_status = GPIO.LOW
             GPIO.setwarnings(False)
-            GPIO.setmode(GPIO.BCM)
+            GPIO.setmode(GPIO.BOARD)
             GPIO.setup(GPIO_PIN, GPIO.OUT)
 
     def switch_high(self):
@@ -86,13 +86,7 @@ class PowerRelay(object):
             return self.expected_status
 
         try:
-            read_process = subprocess.Popen(["gpio -g read "
-                                             + str(self.gpio_pin)],
-                                            shell=True,
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT)
-            message = read_process.communicate(input)
-            return int(message[0].rstrip())
+            return GPIO.input(self.gpio_pin)
         except:
             return 0
 
@@ -106,7 +100,7 @@ def test_default():
     '''
     Test that the default is off.
     '''
-    power_relay = PowerRelay("Heater", DEFAULT_GPIO_PIN)
+    power_relay = PowerRelay("Heater", DEFAULT_PIN)
     assert power_relay.get_status == 0
 
 
@@ -114,7 +108,7 @@ def test_on():
     '''
     Test that it can be turned on.
     '''
-    power_relay = PowerRelay("Heater", DEFAULT_GPIO_PIN)
+    power_relay = PowerRelay("Heater", DEFAULT_PIN)
     power_relay.switch_high()
     assert power_relay.get_status == 1
 
@@ -123,7 +117,7 @@ def test_off():
     '''
     Test that it can be turned off.
     '''
-    power_relay = PowerRelay("Heater", DEFAULT_GPIO_PIN)
+    power_relay = PowerRelay("Heater", DEFAULT_PIN)
     power_relay.switch_high()
     power_relay.switch_low()
     assert power_relay.get_status == 1
@@ -138,7 +132,9 @@ if __name__ == '__main__':
 
     print "Tests finished"
 
-    TEST_RELAY = PowerRelay("Heater", DEFAULT_GPIO_PIN)
+    TEST_RELAY = PowerRelay("Heater", DEFAULT_PIN)
     TEST_RELAY.switch_high()
+    print str(TEST_RELAY.get_status())
     time.sleep(10)
     TEST_RELAY.switch_low()
+    print str(TEST_RELAY.get_status())

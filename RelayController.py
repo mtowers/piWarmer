@@ -2,23 +2,17 @@
 
 # encoding: UTF-8
 
-
-# TODO - Wire the status, and button pins
 # TODO - DO NOT CAPTURE keyboard interupt exceptions
 # TODO - Fix string precision on temperture
 # TODO - Make sure strings can handle unicode
 # TODO - Make commands and help response customizable for Localization
 # TODO - Separate logs for the sensors
 # TODO - Add a restart command
-# TODO - Figure out process management
 # TODO - Add an "Uptime" status
-# TODO - Add Temp logging
-# TODO - Add Gas sensor logging
-# TODO - Escape the main logs for \n and \r
-# TODO - Figure out process managment
 # TODO - Make "Quit" work
 
 import time
+import threading
 import subprocess
 import Queue
 from multiprocessing import Queue as MPQueue
@@ -106,6 +100,28 @@ class RelayController(object):
 
         return "Temp probe not enabled."
 
+    def get_time_text(self, number_of_seconds):
+        """
+        Returns the amount of time in the appropriate unit.
+        """
+
+        if number_of_seconds < 60:
+            return str(number_of_seconds) + " seconds"
+
+        number_of_minutes = number_of_seconds / 60
+
+        if number_of_minutes < 60:
+            return str(number_of_minutes) + " minutes"
+
+        number_hours = number_of_minutes / 60
+
+        if number_of_hours < 24:
+            return str(number_of_hours) + " hours"
+
+        number_days = number_of_hours / 24
+
+        return str(number_of_days) + " days"
+
     def __get_heater_status__(self):
         """
         Returns the status of the heater/relay.
@@ -118,9 +134,8 @@ class RelayController(object):
         if self.heater_relay.get_status() == 1:
             status_text += "ON. "
             if self.__heater_shutoff_timer__ is not None:
-                time_left = int(
-                    (self.__heater_shutoff_timer__ - time.time()) / 60.0)
-                status_text += str(time_left) + "Minutes remaining."
+                status_text += get_time_text(self.__heater_shutoff_timer__ - time.time())
+                status_text += " remaining."
             else:
                 status_text += "Unknown time left."
         else:
@@ -179,12 +194,14 @@ class RelayController(object):
             print "Nope"
             exit()
 
-        self.fona = Fona.Fona("fona", serial_connection,
+        self.fona = Fona.Fona(serial_connection,
+                              self.configuration.cell_power_status_pin,
+                              self.configuration.cell_ring_indicator_pin,
                               self.configuration.allowed_phone_numbers)
 
         # create heater relay instance
         self.heater_relay = PowerRelay(
-            "heater_relay", configuration.heater_gpio_pin)
+            "heater_relay", configuration.heater_pin)
         self.heater_queue = MPQueue()
         self.gas_sensor_queue = MPQueue()
         self.message_send_queue = MPQueue()
@@ -250,9 +267,10 @@ class RelayController(object):
 
         return False
 
-    def log_info_message(self, message_to_log):
+    def log_info_message(self, message_to_log, print_to_screen=True):
         """ Log and print at Info level """
-        print "LOG:" + message_to_log.replace("\n", "\\n").replace("\r", "\\r")
+        if print_to_screen:
+            print "LOG:" + Fona.escape(message_to_log)
         self.logger.info(Fona.escape(message_to_log))
 
         return message_to_log
@@ -445,7 +463,7 @@ class RelayController(object):
 
         self.log_info_message("SHUTDOWN: Shutting down piWarmer.")
         if not local_debug.is_debug():
-            subprocess.Popen(["sudo shutdown -P now " + str(self.configuration.heater_gpio_pin)],
+            subprocess.Popen(["sudo shutdown -P now " + str(self.configuration.heater_pin)],
                              shell=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
 
@@ -465,7 +483,9 @@ class RelayController(object):
         Monitor the Gas Sensors. Sends a warning message if gas is detected.
         """
 
-        if self.mq2_sensor is None or not self.configuration.is_mq2_enabled:
+        # Since it is not enabled... then no reason to every
+        # try again during this run
+        if self.mq2_sensor is not None and self.configuration.is_mq2_enabled:
             return
 
         detected = self.is_gas_detected()
@@ -489,8 +509,10 @@ class RelayController(object):
             self.gas_sensor_queue.put(GAS_WARNING)
             self.heater_queue.put(OFF)
         else:
-            self.log_info_message("Sending OK into queue")
+            self.log_info_message("Sending OK into queue", False)
             self.gas_sensor_queue.put(GAS_OK)
+
+        threading.Timer(30, self.monitor_gas_sensor).start()
 
     def initialize_modem(self, retries=4, seconds_between_retries=10):
         """
@@ -552,16 +574,16 @@ class RelayController(object):
 
         try:
             while not self.gas_sensor_queue.empty():
-                gas_sensor_status = self.gas_sensor_queue.get_nowait()
+                gas_sensor_status = self.gas_sensor_queue.get()
 
                 if gas_sensor_status is None:
                     self.log_warning_message("Gas sensor was None.")
                 else:
-                    self.log_info_message("Q:" + gas_sensor_status)
+                    self.log_info_message("Q:" + gas_sensor_status, False)
 
                 self.mq2_sensor.update()
                 self.log_info_message("mq_2_level=" + str(self.mq2_sensor.current_value) + ", has_been_detected=" + \
-                    str(self.gas_detected))
+                    str(self.gas_detected), self.gas_detected)
 
                 # print "QUEUE: " + myLEDqstatus
                 if GAS_WARNING in gas_sensor_status:
@@ -657,8 +679,14 @@ class RelayController(object):
         """
         Processes any messages sitting on the sim card.
         """
-        # get messages on SIM Card
-        messages = self.fona.get_messages()
+        # Check to see if the RI pin has been
+        # tripped, or is it is time to poll
+        # for messages.
+        if not self.fona.is_message_waiting():
+            return False
+
+        # Get the messages from the sim card
+        messages = self.fona.get_messages("process_pending_text_messages")
         total_message_count = len(messages)
         messages_processed_count = 0
 
@@ -714,8 +742,8 @@ class RelayController(object):
         other health signals are OK.
         """
 
-        self.log_info_message("monitor_fona_health")
         if time.time() > self.__fona_battery_check_timer__:
+            self.log_info_message("monitor_fona_health")
             cbc = self.fona.get_current_battery_condition()
 
             self.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" + \
@@ -734,50 +762,40 @@ class RelayController(object):
                 # Check again in an hour
                 self.__fona_battery_check_timer__ = time.time() + 60 * 60
 
+    def run_servicer(self, service_callback, service_name):
+        """
+        Calls and handles something with a servicer.
+        """
+
+        if service_callback is None:
+            self.log_warning_message("Unable to service " + service_name)
+
+        try:
+            service_callback()
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
+        except:
+            self.log_warning_message("Exception while servicing " + service_name)
+
     def run_pi_warmer(self):
         """
         Service loop to run the PiWarmer
         """
         self.log_info_message('Press Ctrl-C to quit.')
 
+        # This can be safely used off the main thread.
+        # and writes into the MPqueue...
+        # It kicks off every 30 seconds
+        self.monitor_gas_sensor()
+
         # TODO - Make this loop killable by CTRL+C
         # TODO - Make this code less messy
         while True:
-            try:
-                self.monitor_gas_sensor()
-            except:
-                self.log_warning_message(
-                    "Exception captured while servicing the Gas Sensor Queue.")
-
-            try:
-                self.monitor_fona_health()
-            except:
-                self.log_warning_message(
-                    "Exception while monitoring the Fona board.")
-
-            try:
-                self.service_gas_sensor_queue()
-            except:
-                self.log_warning_message(
-                    "Exception captured while servicing the Gas Sensor Queue.")
-
-            try:
-                self.service_heater_queue()
-            except:
-                self.log_warning_message(
-                    "Exception captured while servicing the Heater/Relay Queue.")
-
-            try:
-                self.process_pending_text_messages()
-            except:
-                self.log_warning_message(
-                    "Exception captured while processing pending messages.")
-
-            try:
-                self.process_message_send_requests()
-            except:
-                self.log_warning_message(
-                    "Exception captured while processing pending messages.")
+            self.run_servicer(self.monitor_fona_health, "Battery check")
+            self.run_servicer(self.service_gas_sensor_queue, "Gas sensor queue")
+            self.run_servicer(self.service_heater_queue, "Heater request queue")
+            self.run_servicer(self.process_pending_text_messages, "Incoming request queue")
+            self.run_servicer(self.process_message_send_requests, "Outgoing requeust queue")
 
 
 #############

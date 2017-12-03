@@ -4,12 +4,20 @@ Module to help with tha AdaFruit Fona modules
 # TODO - Need to wire the GPIO to the Fona to turn itself on
 # TODO - Could wire to the fona for a status/waiting bit
 import time
+import threading
 import local_debug
+from multiprocessing import Queue as MPQueue
+
+if not local_debug.is_debug():
+    import RPi.GPIO as GPIO
 
 SECONDS_TO_WAIT_AFTER_SEND = 5
 BATTERY_CRITICAL = 40
 BATTERY_WARNING = 60
 DEFAULT_RESPONSE_READ_TIMEOUT = 5
+
+DEFAULT_RING_INDICATOR_PIN = 18 # (Physical... GPIO24)
+DEFAULT_POWER_STATUS_PIN = 16 # (Physical ..GPIO23)
 
 
 def escape(text):
@@ -213,10 +221,14 @@ class Fona(object):
     unauthorize numbers
     """
 
-    def __init__(self, name, ser, allowednumbers):
-        self.name = name
+    def __init__(self, ser, \
+            power_status_pin, \
+            ring_indicator_pin, \
+            allowednumbers):
         self.command_history = []
         self.serial_connection = ser
+        self.power_status_pin = power_status_pin
+        self.ring_indicator_pin = ring_indicator_pin
 
         if self.serial_connection is not None:
             self.serial_connection.flushInput()
@@ -228,7 +240,74 @@ class Fona(object):
         self.disable_verbose_errors()
         self.set_sms_mode()
 
-        print self.read_from_fona(10)
+        self.read_from_fona(10)
+
+        self.__message_waiting_queue__ = MPQueue()
+        self.__initialize_gpio_pins__()
+        self.poll_for_messages()
+
+    def __use_gpio_pins__(self):
+        """
+        Returns true if we should use the GPIO pins
+        to tell status.
+        """
+
+        return self.power_status_pin is not None \
+            and self.ring_indicator_pin is not None
+
+    def __initialize_gpio_pins__(self):
+        """
+        Gets the Fona ready to be interacted with by the GPIO board.
+        """
+
+        if not self.__use_gpio_pins__():
+            print "Skipping GPIO init."
+            return False
+
+        print "Setting GPIO input modes"
+
+        # Set the RI pin to pulse low when
+        # a text message is received
+        self.send_command("AT+CFGRI=1")
+
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BOARD)
+        GPIO.setup(self.ring_indicator_pin, GPIO.IN)
+        GPIO.setup(self.power_status_pin, GPIO.IN)
+        GPIO.add_event_detect(self.ring_indicator_pin, GPIO.RISING, self.ring_indicator_pulsed)
+
+
+        return True
+
+    def poll_for_messages(self):
+        """
+        Check for messages every 60 seconds.
+        """
+        self.__message_waiting_queue__.put("POLL")
+        threading.Timer(60, self.poll_for_messages).start()
+
+    def ring_indicator_pulsed(self, io_pin):
+        """
+        The RI went from LOW to HIGH.
+        That means a message.
+        """
+        self.__message_waiting_queue__.put("RI:" + str(io_pin))
+
+    def is_power_on(self):
+        """
+        Returns TRUE if the power is on.
+        """
+
+        print "is_power_on()"
+        if self.__use_gpio_pins__():
+            pin_value = GPIO.input(self.power_status_pin)
+            print "Power... PIN=" + str(self.power_status_pin) + ", VAL=" + str(pin_value)
+            return GPIO.input(self.power_status_pin) == GPIO.HIGH 
+
+        # If we are not using the power pins
+        # then use the existance of the serial
+        # modem connection
+        return self.ser is not None
 
     def write_to_fona(self,
                       text):
@@ -393,10 +472,25 @@ class Fona(object):
         """
         return self.send_command("AT+CMGF=1")
 
+    def is_message_waiting(self):
+        """
+        Uses the GPIO pin to see if a message is waiting.
+        """
+
+        size = self.__message_waiting_queue__.qsize()
+
+        if size > 0:
+            print "qsize()=" + str(size)
+
+        return size > 0
+
     def get_message(self, index):
         """
         Returns the message at the given index.
         """
+
+        print "get_message(" + str(index) + ")"
+
         self.set_sms_mode()
         return self.send_command('AT+CMGL=' + index + '')
 
@@ -404,6 +498,9 @@ class Fona(object):
         """
         Returns the raw result of ALL the messages on the card.
         """
+
+        print "get_all_messages()"
+
         self.set_sms_mode()
         return self.send_command('AT+CMGL="ALL"')
 
@@ -471,7 +568,7 @@ class Fona(object):
 
         return True
 
-    def get_messages(self):
+    def get_messages(self, source="UNKNOWN"):
         """
         Reads text messages on the SIM card and returns
         a list of messages with three fields: id, num, message.
@@ -481,6 +578,8 @@ class Fona(object):
             return []
 
         # put into SMS mode
+        print "Checking for messages due to " + source
+
         self.set_sms_mode()
         # get all text messages currently on SIM Card
         self.serial_connection.write('AT+CMGL="ALL"\r')
@@ -496,6 +595,9 @@ class Fona(object):
                 messages.append(new_message)
 
                 time.sleep(1)
+
+        self.__clear_messages_waiting_queue__()
+
         return messages
 
     def delete_message(self, message_to_delete, confirmation=True):
@@ -514,7 +616,7 @@ class Fona(object):
 
     def delete_messages(self, confirmation=True):
         """ Deletes any messages. """
-        messages = self.get_messages()
+        messages = self.get_messages("delete_messages")
         messages_deleted = 0
         for message_to_delete in messages:
             messages_deleted += 1
@@ -522,12 +624,27 @@ class Fona(object):
 
         return messages_deleted
 
+    def __clear_messages_waiting_queue__(self):
+        """
+        Clears the queue that tells us if we should check for
+        messages.
+        """
+
+        events_cleared = 0
+        while not self.__message_waiting_queue__.empty():
+            print "Clearing queue."
+            event = self.__message_waiting_queue__.get()
+            events_cleared += 1
+            print "Q:" + event
+
+        return events_cleared
+
 
 if __name__ == '__main__':
     import serial
 
     if not local_debug.is_debug():
-        PHONE_NUMBER = input("Phone number>")
+        PHONE_NUMBER = "2066795094" # input("Phone number>")
     else:
         PHONE_NUMBER = "2061234567"
 
@@ -536,26 +653,38 @@ if __name__ == '__main__':
     else:
         SERIAL_CONNECTION = serial.Serial('/dev/ttyUSB0', 9600)
 
-    FONA = Fona("Fona", SERIAL_CONNECTION,
-                {PHONE_NUMBER, '18558655971'})
+    FONA = Fona(SERIAL_CONNECTION,
+                DEFAULT_POWER_STATUS_PIN,
+                DEFAULT_RING_INDICATOR_PIN,
+                {PHONE_NUMBER})
+
+    if not FONA.is_power_on():
+        print "Power is off.."
+        exit()
+
     # fona.get_carrier()
     BATTERY_CONDITION = FONA.get_current_battery_condition()
-    FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
-                      str(BATTERY_CONDITION.battery_percent)
-                      + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
+    # FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
+    #                   str(BATTERY_CONDITION.battery_percent)
+    #                   + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
     # print "Signal strength:"
     SIGNAL_STRENGTH = FONA.get_signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
     # print fona.get_module_name()
     # print fona.get_sim_card_number()
-    print FONA.get_all_messages()
 
-    for message in FONA.get_messages():
-        print "ID:" + message.message_id
-        print "Date:" + message.message_date
-        print "Time:" + message.message_time
-        print "Num:" + message.sender_number
-        print "Stat:" + message.message_status
-        print "SMS:" + message.message_text
+    while True:
+        if FONA.is_message_waiting():
+            print "Message waiting.."
+
+            for message in FONA.get_messages("self_test"):
+                print "ID:" + message.message_id
+                print "Date:" + message.message_date
+                print "Time:" + message.message_time
+                print "Num:" + message.sender_number
+                print "Stat:" + message.message_status
+                print "SMS:" + message.message_text
+
+            FONA.delete_messages(False)
 
     # fona.get_messages(False)

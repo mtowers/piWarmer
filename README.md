@@ -35,17 +35,28 @@ For a complete set of installation instructions, visit [https://github.com/mdegr
 
 ## Wiring
 
+__Note__: GPIO25 is physical pin 22
+
 ### Relay
-- Red wire from GPIO 18 to Relay "+"
+- Red wire from GPIO25 to Relay "+"
 - Black wire from Relay "-" to GPIO GND
 
 ### Fona
 
+### Fona Serial/Modem Communication
 - TTL Black to Fona "GND"
 - TTL White to Fona "TX"
 - TTL Green to Fona "RX"
 - TTL Red to Fona "Vio"
 - USB to Pi USB
+
+### Fona Status
+- ORANGE Fona PS to GPIO23
+- YELLOW Fona Key to GPIO GND
+- GREEN Fona RI to GPIO24
+
+__Note__:GPIO23 is physical pin 16
+__Note__:GPIO24 is physical pin 18
 
 ### MQ2 Gas Sensor / ADC
 

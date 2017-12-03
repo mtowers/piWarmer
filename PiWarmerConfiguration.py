@@ -12,7 +12,7 @@ def get_config_file_location():
     """
     Get the location of the configuration file.
 
-    >>> get_confile_file_location()
+    >>> get_config_file_location()
     './piWarmer.config'
     """
 
@@ -39,8 +39,12 @@ class PiWarmerConfiguration(object):
             'SETTINGS', 'SERIAL_PORT')
         self.cell_baud_rate = self.__config_parser__.get(
             'SETTINGS', 'BAUDRATE')
-        self.heater_gpio_pin = self.__config_parser__.getint(
-            'SETTINGS', 'HEATER_GPIO_PIN')
+        self.cell_ring_indicator_pin = self.__config_parser__.getint(
+            'SETTINGS', 'RING_INDICATOR_PIN')
+        self.cell_power_status_pin = self.__config_parser__.getint(
+            'SETTINGS', 'POWER_STATUS_PIN')
+        self.heater_pin = self.__config_parser__.getint(
+            'SETTINGS', 'HEATER_PIN')
         self.is_mq2_enabled = self.__config_parser__.getboolean(
             'SETTINGS', 'MQ2')
         self.is_temp_probe_enabled = self.__config_parser__.getboolean(
@@ -71,9 +75,9 @@ def test_configuration():
     assert config.allowed_phone_numbers.count > 0
     assert config.cell_baud_rate == '9600'
     assert config.cell_serial_port is not None
-    assert config.heater_gpio_pin is not None
-    assert config.heater_gpio_pin >= 1
-    assert config.heater_gpio_pin < 32
+    assert config.heater_pin is not None
+    assert config.heater_pin >= 1
+    assert config.heater_pin < 32
     assert config.is_mq2_enabled is not None
     assert config.is_temp_probe_enabled is not None
     assert config.log_filename is not None
