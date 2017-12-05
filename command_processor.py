@@ -34,6 +34,7 @@ class CommandResponse(object):
 
         self.__message__ = message
 
+
 ##################
 ### UNIT TESTS ###
 ##################
