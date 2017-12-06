@@ -15,7 +15,8 @@ if __name__ == '__main__':
     else:
         SERIAL_CONNECTION = serial.Serial('/dev/ttyUSB0', 9600)
 
-    FONA = fona.Fona(SERIAL_CONNECTION,
+    FONA = fona.Fona(None,
+                     SERIAL_CONNECTION,
                      fona.DEFAULT_POWER_STATUS_PIN,
                      fona.DEFAULT_RING_INDICATOR_PIN,
                      True)

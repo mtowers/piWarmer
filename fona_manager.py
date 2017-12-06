@@ -54,8 +54,10 @@ class FonaManager(object):
         Queues the message to be sent out.
         """
 
+        self.__lock__.acquire(True)
         self.__send_message_queue__.put(
             [phone_number, text_message, maximum_number_of_retries])
+        self.__lock__.release()
 
     def signal_strength(self):
         """
@@ -85,12 +87,15 @@ class FonaManager(object):
         """
 
         results = []
+
+        self.__lock__.acquire(True)
         try:
             results = self.__fona__.get_messages()
         except:
             exception_message = "ERROR fetching messages!"
             print exception_message
             self.__logger__.warning(exception_message)
+        self.__lock__.release()
 
         return results
 
@@ -101,12 +106,14 @@ class FonaManager(object):
 
         num_deleted = 0
 
+        self.__lock__.acquire(True)
         try:
             num_deleted = self.__fona__.delete_messages()
         except:
             exception_message = "ERROR deleting messages!"
             print exception_message
             self.__logger__.warning(exception_message)
+        self.__lock__.release()
 
         return num_deleted
 
@@ -115,12 +122,14 @@ class FonaManager(object):
         Deletes any messages from the Fona.
         """
 
+        self.__lock__.acquire(True)
         try:
             self.__fona__.delete_message(message_to_delete)
         except:
             exception_message = "ERROR deleting message!"
             print exception_message
             self.__logger__.warning(exception_message)
+        self.__lock__.release()
 
     def __update_battery_state__(self):
         """
@@ -147,6 +156,8 @@ class FonaManager(object):
         battery_checked = False
         signal_checked = False
 
+        self.__lock__.acquire(True)
+
         try:
             while not self.__update_status_queue__.empty():
                 command = self.__update_status_queue__.get()
@@ -162,6 +173,8 @@ class FonaManager(object):
             print exception_message
             self.__logger__.warning(exception_message)
 
+        self.__lock__.release()
+
 
     def __process_send_messages__(self):
         """
@@ -169,6 +182,8 @@ class FonaManager(object):
         """
 
         messages_to_retry = []
+
+        self.__lock__.acquire(True)
         try:
             while not self.__send_message_queue__.empty():
                 message_to_send = self.__send_message_queue__.get()
@@ -190,6 +205,8 @@ class FonaManager(object):
             self.__logger__.warning(
                 "Adding message back for up to" + str(message_to_retry[3]) + " more retries.")
             self.__send_message_queue__.put(message_to_retry)
+
+        self.__lock__.release()
 
     def __trigger_check_battery__(self):
         """
@@ -215,7 +232,9 @@ class FonaManager(object):
         """
 
         self.__logger__ = logger
-        self.__fona__ = fona.Fona(serial_connection,
+        self.__lock__ = threading.Lock()
+        self.__fona__ = fona.Fona(logger,
+                                  serial_connection,
                                   power_status_pin,
                                   ring_indicator_pin)
         self.__current_battery_state__ = None
@@ -259,20 +278,24 @@ if __name__ == '__main__':
         print "Power is off.."
         exit()
 
-    # fona.get_carrier()
     BATTERY_CONDITION = FONA_MANAGER.battery_condition()
     FONA_MANAGER.send_message(PHONE_NUMBER,
                               "Time:" + str(time.time()) + "\nPCT:"
                               + str(BATTERY_CONDITION.battery_percent)
                               + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
-    # print "Signal strength:"
+
     SIGNAL_STRENGTH = FONA_MANAGER.signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
 
     while True:
-        print "W?:" + str(FONA_MANAGER.is_message_waiting())
         BATTERY_CONDITION = FONA_MANAGER.battery_condition()
+        SIGNAL_STRENGTH = FONA_MANAGER.signal_strength()
+
+        if FONA_MANAGER.is_message_waiting():
+            MESSAGES = FONA_MANAGER.get_messages()
+            FONA_MANAGER.delete_messages()
+
+            print "Battery:" + str(BATTERY_CONDITION.battery_percent)
+            print "Signal:" + SIGNAL_STRENGTH.classify_strength()
+
         FONA_MANAGER.update()
-        time.sleep(1)
-    # print fona.get_module_name()
-    # print fona.get_sim_card_number()
