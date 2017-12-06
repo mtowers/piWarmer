@@ -108,13 +108,21 @@ A MicroUSB to USB adapter is required for the modem to connect into the Pi Zero'
 
 - [ ] [Raspberry Pi W, case, and IO pins](https://www.amazon.com/Raspberry-Starter-Power-Supply-Premium/dp/B0748MBFTS/ref=sr_1_3?s=electronics&ie=UTF8&qid=1512070820&sr=1-3&keywords=raspberry+pi+zero+pins)
 - [ ] [Adafruit GSM board, SMA edition](https://www.amazon.com/gp/product/B011P07916/ref=oh_aui_detailpage_o02_s00?ie=UTF8&psc=1)
-- [ ] [Adafruit GSM Quadband Antenna](https://www.amazon.com/gp/product/B00N4Y2C4G/ref=oh_aui_detailpage_o08_s00?ie=UTF8&psc=1)
 - [ ] [Adafruit 1S Lipo W/ JST connector](https://www.amazon.com/Battery-Packs-Lithium-Polymer-1200mAh/dp/B00J2QET64/ref=sr_1_5?ie=UTF8&qid=1512070675&sr=8-5&keywords=adafruit+lipo)
 - [ ] [MicroUSB to USB adapter](https://www.amazon.com/Ksmile%C2%AE-Female-Adapter-SamSung-tablets/dp/B01C6032G0/ref=sr_1_1?dd=tLyVcVfk00xcTUme6zjHhQ%2C%2C&ddc_refnmnt=pfod&ie=UTF8&qid=1512071097&sr=8-1&keywords=micro+usb+adapter&refinements=p_97%3A11292772011)
 - [ ] [USB to TTL/Serial adapter](https://www.amazon.com/gp/product/B00QT7LQ88/ref=oh_aui_detailpage_o01_s00?ie=UTF8&psc=1)
 - [ ] [Ting GSM Sim Card](https://www.amazon.com/gp/product/B013LKL5IQ/ref=oh_aui_detailpage_o02_s00?ie=UTF8&psc=1)
 - [ ] [Iot Power Relay](https://www.amazon.com/gp/product/B00WV7GMA2/ref=oh_aui_detailpage_o01_s01?ie=UTF8&psc=1)
 - [ ] [Experimentation board with wires](https://www.amazon.com/gp/product/B01LYN4J3B/ref=oh_aui_detailpage_o08_s00?ie=UTF8&psc=1)
+
+#### Antenna
+
+You will need an antenna, and two options have been tried.
+One is a small antenna that will work if the device is near a window or your hangar has good reception.
+The 7dbi (high gain) antenna option should be used if reception is an issue
+
+- [ ] [Adafruit GSM Quadband Antenna](https://www.amazon.com/gp/product/B00N4Y2C4G/ref=oh_aui_detailpage_o08_s00?ie=UTF8&psc=1)
+- [ ] [High gain antenna](https://www.amazon.com/gp/product/B01M9F08JR/ref=oh_aui_detailpage_o00_s01?ie=UTF8&psc=1)
 
 ### For Optional Gas Sensor
 
