@@ -33,21 +33,7 @@ MAX_TIME = "MAX_TIME"
 GAS_WARNING = "Gas warning"
 GAS_OK = "OK"
 
-
-class MessageSendRequest(object):
-    """
-    Object to use for queuing message requests.
-    """
-
-    def is_valid(self):
-        """
-        Is the message valid.
-        """
-        return self.phone_number is not None and self.message is not None
-
-    def __init__(self, phone_number, message):
-        self.phone_number = phone_number
-        self.message = message
+SYSTEM_START_TIME = time.time()
 
 
 class RelayController(object):
@@ -190,7 +176,7 @@ class RelayController(object):
         Returns the status of the piWarmer.
         """
 
-        uptime = time.time() - self.__system_start_time__
+        uptime = time.time() - SYSTEM_START_TIME
 
         status = self.__get_heater_status__() + "\n"
         status += self.__get_gas_sensor_status__() + "\n"
@@ -206,7 +192,7 @@ class RelayController(object):
 
     def __init__(self, configuration, logger):
         """ Initialize the object. """
-        self.__system_start_time__ = time.time()
+
         self.configuration = configuration
         self.logger = logger
         self.gas_detected = False
@@ -227,7 +213,6 @@ class RelayController(object):
             "heater_relay", configuration.heater_pin)
         self.heater_queue = MPQueue()
         self.gas_sensor_queue = MPQueue()
-        self.message_send_queue = MPQueue()
 
         # create queue to hold heater timer.
         self.__heater_shutoff_timer__ = None
@@ -252,11 +237,10 @@ class RelayController(object):
         """
         Puts a request to send a message into the queue.
         """
-        if self.message_send_queue is not None and phone_number is not None and message is not None:
+        if self.fona_manager is not None and phone_number is not None and message is not None:
             self.log_info_message(
                 "MSG - " + phone_number + " : " + utilities.escape(message))
-            self.message_send_queue.put(
-                MessageSendRequest(phone_number, message))
+            self.fona_manager.send_message(phone_number, message)
 
             return True
 
@@ -371,7 +355,6 @@ class RelayController(object):
                                                  self.__get_help_status__())
 
     # TODO - Move as much of this into command_processor as possible.
-
     def get_command_response(self, message, phone_number):
         """ returns a command response based on the message. """
         if "on" in message:
@@ -390,7 +373,8 @@ class RelayController(object):
                                                      "Restart request from " + phone_number)
         elif "shutdown" in message:
             return command_processor.CommandResponse(command_processor.PI_WARMER_OFF,
-                                                     "Received SHUTDOWN request from " + phone_number)
+                                                     "Received SHUTDOWN request from " \
+                                                     + phone_number)
 
         return command_processor.CommandResponse(command_processor.HELP,
                                                  "COMMANDS: ON, OFF, STATUS, QUIT, SHUTDOWN")
@@ -725,28 +709,6 @@ class RelayController(object):
 
         return total_message_count > 0
 
-    def process_message_send_requests(self):
-        """
-        Process all of the requests to send messages.
-        """
-
-        if self.message_send_queue is None:
-            return False
-
-        is_success = True
-
-        while not self.message_send_queue.empty():
-            try:
-                send_request = self.message_send_queue.get_nowait()
-
-                self.fona_manager.send_message(send_request.phone_number,
-                                               send_request.message)
-            except:
-                self.log_warning_message(
-                    "Error while processing sending queue!")
-                is_success = False
-
-        return is_success
 
     def monitor_fona_health(self):
         """
@@ -806,8 +768,7 @@ class RelayController(object):
                               "Heater request queue")
             self.run_servicer(self.process_pending_text_messages,
                               "Incoming request queue")
-            self.run_servicer(self.process_message_send_requests,
-                              "Outgoing request queue")
+            self.fona_manager.update()
 
 
 #############
