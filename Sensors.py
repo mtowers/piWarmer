@@ -61,7 +61,7 @@ class Sensors(object):
 
         self.current_light_sensor_reading = LightSensorResult(
             self.__light_sensor__)
-        self.__logger__.info("LIGHT, Lux=" + str(self.current_light_sensor_reading.lux) \
+        self.__logger__.info(", LIGHT, Lux=" + str(int(self.current_light_sensor_reading.lux)) \
                              + ", VIS=" + str(self.current_light_sensor_reading.full_spectrum) \
                              + ", IR=" + str(self.current_light_sensor_reading.infrared))
 
@@ -71,7 +71,7 @@ class Sensors(object):
         """
 
         self.current_gas_sensor_reading = self.__gas_sensor__.update()
-        self.__logger__.info("GAS, Level=" + str(self.current_gas_sensor_reading.current_value) \
+        self.__logger__.info(", GAS, Level=" + str(self.current_gas_sensor_reading.current_value) \
                              + ", Detected=" + str(self.current_gas_sensor_reading.is_gas_detected))
 
     def __update_temperature_sensor__(self):
@@ -85,4 +85,4 @@ class Sensors(object):
             if results_count > 0:
                 self.current_temperature_sensor_reading = int(
                     sensor_readings[0])
-                self.__logger__.info("TEMP, F=" + str(self.current_temperature_sensor_reading))
+                self.__logger__.info(", TEMP, F=" + str(self.current_temperature_sensor_reading))
