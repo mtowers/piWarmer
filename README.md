@@ -115,7 +115,7 @@ A MicroUSB to USB adapter is required for the modem to connect into the Pi Zero'
 - [ ] [Iot Power Relay](https://www.amazon.com/gp/product/B00WV7GMA2/ref=oh_aui_detailpage_o01_s01?ie=UTF8&psc=1)
 - [ ] [Experimentation board with wires](https://www.amazon.com/gp/product/B01LYN4J3B/ref=oh_aui_detailpage_o08_s00?ie=UTF8&psc=1)
 
-### Antenna
+#### Antenna
 
 You will need an antenna, and two options have been tried.
 One is a small antenna that will work if the device is near a window or your hangar has good reception.
