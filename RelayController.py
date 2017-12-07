@@ -12,6 +12,13 @@
 # TODO - Create an "AutoUpdate" feature. Can probably be in the rc.local
 # TODO - Figure out a way to kill rc.local
 # TODO - Document rc.local
+# TODO - Break apart the status command into smaller command/responses
+# TODO - Stop pulling/acting on messages whehn one changes that state of
+#        the system (ON/OFF)
+# TODO - Clear the messages when a reboot or QUIT is encountered
+# TODO - Use a map/dictionary to trigger a message processing request
+# TODO - Move the command processing into "message_processor".
+#        Have relay controller be a member of MessageProcessor
 
 import sys
 import time
@@ -108,8 +115,8 @@ class RelayController(object):
         cbc = self.fona_manager.battery_condition()
         signal = self.fona_manager.signal_strength()
 
-        status = "Cell signal is " + signal.classify_strength() + ", battery at " + \
-            str(cbc.battery_percent) + "%, "
+        status = "Signal strength is " + str(signal.get_signal_strength()) + "(" + signal.classify_strength() + ")" \
+                 + ", battery at " + str(cbc.battery_percent) + "%, "
 
         if not cbc.is_battery_ok():
             status += "LOW BATTERY."
