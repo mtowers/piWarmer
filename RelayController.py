@@ -390,6 +390,8 @@ class RelayController(object):
                 self.queue_message_to_all_numbers(
                     "Shutting down Raspberry Pi.")
                 self.shutdown()
+
+                return True
             except:
                 self.log_warning_message(
                     "CR: Issue shutting down Raspberry Pi")
@@ -397,23 +399,21 @@ class RelayController(object):
             try:
                 self.queue_message_to_all_numbers("Attempting restart")
                 self.restart()
+
+                return True
             except:
                 self.log_warning_message(
                     "CR: Issue restarting")
         elif command_response.get_command() == command_processor.HEATER_OFF:
-            try:
-                self.log_info_message("CR: Turning heater OFF")
-                self.heater_queue.put(OFF)
-            except:
-                self.log_warning_message(
-                    "CR: Issue turning off Heater")
+            self.log_info_message("CR: Turning heater OFF")
+            self.heater_queue.put(OFF)
+
+            return True
         elif command_response.get_command() == command_processor.HEATER_ON:
-            try:
-                self.log_info_message("CR: Turning heater ON")
-                self.heater_queue.put(ON)
-            except:
-                self.log_warning_message(
-                    "Issue turning on Heater")
+            self.log_info_message("CR: Turning heater ON")
+            self.heater_queue.put(ON)
+
+        return False
 
     def process_message(self, message, phone_number):
         """
@@ -448,7 +448,7 @@ class RelayController(object):
         command_response = self.get_command_response(
             message, phone_number)
         self.log_info_message("Got command response")
-        self.execute_command(command_response)
+        state_changed = self.execute_command(command_response)
         self.log_info_message("executed command.")
 
         self.queue_message(
@@ -456,7 +456,7 @@ class RelayController(object):
         self.log_info_message(
             "Sent message: " + command_response.get_message() + " to " + phone_number)
 
-        return command_response.get_message()
+        return command_response.get_message(), state_changed
 
     def restart(self):
         """
@@ -699,9 +699,14 @@ class RelayController(object):
             for message in messages:
                 messages_processed_count += 1
                 self.fona_manager.delete_message(message)
-                response = self.process_message(
+                response, state_changed = self.process_message(
                     message.message_text, message.sender_number)
                 self.log_info_message(response)
+
+                # If the command did something to the unit
+                # stop processing other commands
+                if state_changed:
+                    break
 
             self.log_info_message(
                 "Found " + str(total_message_count)
