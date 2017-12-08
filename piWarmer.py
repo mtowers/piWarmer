@@ -20,7 +20,8 @@
 import logging
 import logging.handlers
 import PiWarmerConfiguration
-import RelayController
+from lib.logger import Logger
+from RelayController import CommandProcessor
 
 
 CONFIGURATION = PiWarmerConfiguration.PiWarmerConfiguration()
@@ -36,5 +37,5 @@ HANDLER.setFormatter(logging.Formatter(
 LOGGER.addHandler(HANDLER)
 
 if __name__ == '__main__':
-    RELAY_CONTROLLER = RelayController.RelayController(CONFIGURATION, LOGGER)
-    RELAY_CONTROLLER.run_pi_warmer()
+    COMMAND_PROCESSOR = CommandProcessor(CONFIGURATION, Logger(LOGGER)
+    COMMAND_PROCESSOR.run_pi_warmer()

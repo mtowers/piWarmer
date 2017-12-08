@@ -43,7 +43,175 @@ GAS_OK = "OK"
 SYSTEM_START_TIME = time.time()
 
 
+
 class RelayController(object):
+    """
+    Class to command and control the power relay.
+    """
+
+    def On(self):
+        """
+        Tells the heater to turn on.
+        """
+
+        if not self.get_status():
+            self.heater_queue.put(ON)
+            return True
+
+        return False
+    
+    def Off(self):
+        """
+        Tells the heater to turn off.
+        """
+        if self.get_status():
+            self.heater_queue.put(OFF)
+            return True
+
+        return False
+
+    def get_status(self):
+        """
+        Get the status of the relay.
+        True is "ON"
+        False is "OFF"
+        """
+
+        return self.heater_relay.get_status() == 1
+
+
+    def get_heater_time_remaining(self):
+        """
+        Returns a string saying how much time is left
+        for the heater.
+        """
+
+        self.logger.log_info_message("get_heater_time_remaining()")
+
+        time_remaining = ""
+
+        if self.__heater_shutoff_timer__ is not None:
+            self.logger.log_info_message("timer is not None")
+            delta_time = self.__heater_shutoff_timer__ - time.time()
+            self.logger.log_info_message("Got the delta")
+            time_remaining = utilities.get_time_text(delta_time)
+            self.logger.log_info_message("Got the text")
+        else:
+            self.logger.log_info_message("No time")
+            time_remaining = "No time"
+
+        self.logger.log_info_message("adding remaining")
+        time_remaining += " remaining."
+
+        self.logger.log_info_message("Done")
+
+        return time_remaining
+
+    def update(self):
+        """
+        Services the queue from the heater service thread.
+        """
+
+        # Check to see if the timer has expired.
+        # If so, then add it to the action.
+        if self.__heater_shutoff_timer__ is not None \
+                and self.__heater_shutoff_timer__ < time.time():
+            self.heater_queue.put(MAX_TIME)
+        elif self.__heater_shutoff_timer__ is None \
+                and self.heater_relay.get_status() == 1:
+            self.logger.log_warning_message(
+                "Heater should not be on, but the PIN is still active... attempting shutdown.")
+            self.heater_queue.put(OFF)
+
+        # check the queue to deal with various issues,
+        # such as Max heater time and the gas sensor being tripped
+        while not self.heater_queue.empty():
+            try:
+                status_queue = self.heater_queue.get_nowait()
+
+                if ON in status_queue:
+                    if self.__on_callback__ is not None:
+                        self.__on_callback__()
+                    self.__start_heater__()
+
+                if OFF in status_queue:
+                    if self.__off_callback__ is not None:
+                        self.__off_callback__()
+                    # self.queue_message_to_all_numbers("Heater turned off.")
+                    self.__stop_heater__()
+
+                if MAX_TIME in status_queue:
+                    if self.__max_time_callback__ is not None:
+                        self.__max_time_callback__()
+                    # self.queue_message_to_all_numbers(
+                    #    "Max time reached. Heater turned OFF")
+                    self.__stop_heater__()
+            except Queue.Empty:
+                pass
+
+
+    def __init__(self,
+                 configuration,
+                 logger,
+                 heater_on_callback,
+                 heater_off_callback,
+                 heater_max_time_callback):
+        """ Initialize the object. """
+
+        self.configuration = configuration
+        self.logger = logger
+        self.__on_callback__ = heater_on_callback
+        self.__off_callback__ = heater_off_callback
+        self.__max_time_callback__ = heater_max_time_callback
+
+        # create heater relay instance
+        self.heater_relay = PowerRelay(
+            "heater_relay", configuration.heater_pin)
+        self.heater_queue = MPQueue()
+
+        # create queue to hold heater timer.
+        self.__heater_shutoff_timer__ = None
+
+        # make sure and turn heater off
+        self.heater_relay.switch_low()
+
+    def __stop_heater__(self):
+        """
+        Stops the heater.
+        """
+        self.logger.log_info_message("__stop_heater__::switch_low()")
+        self.heater_relay.switch_low()
+        self.logger.log_info_message("__stop_heater__::stop_heater_timer()")
+        self.__stop_heater_timer__()
+
+    def __start_heater__(self):
+        """
+        Starts the heater.
+        """
+        self.logger.log_info_message("__start_heater__::switch_high()")
+        self.heater_relay.switch_high()
+        self.logger.log_info_message("__start_heater__::start_heater_timer()")
+        self.__start_heater_timer__()
+    
+    def __stop_heater_timer__(self):
+        """
+        Stops the heater timer.
+        """
+
+        self.logger.log_info_message("Cancelling the heater shutoff timer.")
+        self.__heater_shutoff_timer__ = None
+
+    def __start_heater_timer__(self):
+        """
+        Starts the shutdown timer for the heater.
+        """
+        self.logger.log_info_message("Starting the heater shutoff timer.")
+        self.__heater_shutoff_timer__ = time.time(
+        ) + (self.configuration.max_minutes_to_run * 60)
+
+        return True
+
+class CommandProcessor(object):
     """ Class to control a power relay based on SMS commands. """
 
     def __clear_existing_messages__(self):
@@ -59,34 +227,10 @@ class RelayController(object):
                 self.queue_message(phone_number,
                                    "Old or unprocessed message(s) found on SIM Card."
                                    + " Deleting...")
-            self.log_info_message(
+            self.logger.log_info_message(
                 str(num_deleted) + " old message cleared from SIM Card")
 
-    def get_heater_time_remaining(self):
-        """
-        Returns a string saying how much time is left
-        for the heater.
-        """
-
-        self.log_info_message("get_heater_time_remaining()")
-
-        time_remaining = ""
-
-        if self.__heater_shutoff_timer__ is not None:
-            self.log_info_message("timer is not None")
-            delta_time = self.__heater_shutoff_timer__ - time.time()
-            self.log_info_message("Got the delta")
-            time_remaining = utilities.get_time_text(delta_time)
-            self.log_info_message("Got the text")
-        else:
-            self.log_info_message("No time")
-            time_remaining = "No time"
-
-        self.log_info_message("adding remaining")
-        time_remaining += " remaining."
-
-        self.log_info_message("Done")
-        return time_remaining
+    
 
     def __get_heater_status__(self):
         """
@@ -216,20 +360,13 @@ class RelayController(object):
                                         self.configuration.cell_ring_indicator_pin)
 
         # create heater relay instance
-        self.heater_relay = PowerRelay(
-            "heater_relay", configuration.heater_pin)
-        self.heater_queue = MPQueue()
+        self.relay_controller = RelayController(configuration, logger)
         self.gas_sensor_queue = MPQueue()
 
-        # create queue to hold heater timer.
-        self.__heater_shutoff_timer__ = None
-
-        # make sure and turn heater off
-        self.heater_relay.switch_low()
-        self.log_info_message("Starting SMS monitoring and heater service")
+        self.logger.log_info_message("Starting SMS monitoring and heater service")
         self.__clear_existing_messages__()
 
-        self.log_info_message("Begin monitoring for SMS messages")
+        self.logger.log_info_message("Begin monitoring for SMS messages")
         self.queue_message_to_all_numbers("piWarmer monitoring started."
                                           + "\n" + self.__get_help_status__())
         self.queue_message_to_all_numbers(self.__get_status__())
@@ -245,7 +382,7 @@ class RelayController(object):
         Puts a request to send a message into the queue.
         """
         if self.fona_manager is not None and phone_number is not None and message is not None:
-            self.log_info_message(
+            self.logger.log_info_message(
                 "MSG - " + phone_number + " : " + utilities.escape(message))
             self.fona_manager.send_message(phone_number, message)
 
@@ -263,20 +400,7 @@ class RelayController(object):
 
         return message
 
-    def log_info_message(self, message_to_log, print_to_screen=True):
-        """ Log and print at Info level """
-        if print_to_screen:
-            print "LOG:" + utilities.escape(message_to_log)
-        self.logger.info(utilities.escape(message_to_log))
 
-        return message_to_log
-
-    def log_warning_message(self, message_to_log):
-        """ Log and print at Warning level """
-        print "WARN:" + message_to_log
-        self.logger.warning(utilities.escape(message_to_log))
-
-        return message_to_log
 
     def is_gas_detected(self):
         """ Returns True if gas is detected. """
@@ -292,14 +416,14 @@ class RelayController(object):
             return False
 
         for allowed_number in self.configuration.allowed_phone_numbers:
-            self.log_info_message(
+            self.logger.log_info_message(
                 "Checking " + phone_number + " against " + allowed_number)
             # Handle phone numbers that start with "1"... sometimes
             if allowed_number in phone_number or phone_number in allowed_number:
-                self.log_info_message(phone_number + " is allowed")
+                self.logger.log_info_message(phone_number + " is allowed")
                 return True
 
-        self.log_info_message(phone_number + " is denied")
+        self.logger.log_info_message(phone_number + " is denied")
         return False
 
     def handle_on_request(self, phone_number):
@@ -309,9 +433,9 @@ class RelayController(object):
             return command_processor.CommandResponse(command_processor.ERROR,
                                                      "Phone number was empty.")
 
-        self.log_info_message("Received ON request from " + phone_number)
+        self.logger.log_info_message("Received ON request from " + phone_number)
 
-        if self.heater_relay.get_status() == 1:
+        if self.relay_controller.get_status():
             return command_processor.CommandResponse(command_processor.NOOP,
                                                      "Heater is already ON, "
                                                      + self.get_heater_time_remaining())
@@ -328,9 +452,9 @@ class RelayController(object):
     def handle_off_request(self, phone_number):
         """ Handle a request to turn off. """
 
-        self.log_info_message("Received OFF request from " + phone_number)
+        self.logger.log_info_message("Received OFF request from " + phone_number)
 
-        if self.heater_relay.get_status() == 1:
+        if self.relay_controller.get_status():
             try:
                 return command_processor.CommandResponse(command_processor.HEATER_OFF,
                                                          "Turning heater off with "
@@ -346,7 +470,7 @@ class RelayController(object):
         """
         Handle a status request.
         """
-        self.log_info_message(
+        self.logger.log_info_message(
             "Received STATUS request from " + phone_number)
 
         return command_processor.CommandResponse(command_processor.STATUS, self.__get_status__())
@@ -355,7 +479,7 @@ class RelayController(object):
         """
         Handle a help request.
         """
-        self.log_info_message(
+        self.logger.log_info_message(
             "Received HELP request from " + phone_number)
 
         return command_processor.CommandResponse(command_processor.STATUS,
@@ -375,7 +499,7 @@ class RelayController(object):
         elif "help" in message:
             return self.handle_help_request(phone_number)
         elif "restart" in message:
-            self.log_info_message("Go restart request")
+            self.logger.log_info_message("Go restart request")
             return command_processor.CommandResponse(command_processor.PI_WARMER_RESTART,
                                                      "Restart request from " + phone_number)
         elif "shutdown" in message:
@@ -400,7 +524,7 @@ class RelayController(object):
 
                 return True
             except:
-                self.log_warning_message(
+                self.logger.log_warning_message(
                     "CR: Issue shutting down Raspberry Pi")
         elif command_response.get_command() == command_processor.PI_WARMER_RESTART:
             try:
@@ -409,10 +533,10 @@ class RelayController(object):
 
                 return True
             except:
-                self.log_warning_message(
+                self.logger.log_warning_message(
                     "CR: Issue restarting")
         elif command_response.get_command() == command_processor.HEATER_OFF:
-            self.log_info_message("CR: Turning heater OFF")
+            self.logger.log_info_message("CR: Turning heater OFF")
             self.heater_queue.put(OFF)
 
             return True
@@ -431,7 +555,7 @@ class RelayController(object):
         #        and ignore it if it is too old.
 
         message = message.lower()
-        self.log_info_message("Processing message:" + message)
+        self.logger.log_info_message("Processing message:" + message)
 
         phone_number = utilities.get_cleaned_phone_number(phone_number)
 
@@ -450,17 +574,17 @@ class RelayController(object):
             invalid_message = "Message was invalid length."
             self.queue_message(
                 phone_number, invalid_message)
-            return self.log_warning_message(invalid_message)
+            return self.logger.log_warning_message(invalid_message)
 
         command_response = self.get_command_response(
             message, phone_number)
-        self.log_info_message("Got command response")
+        self.logger.log_info_message("Got command response")
         state_changed = self.execute_command(command_response)
-        self.log_info_message("executed command.")
+        self.logger.log_info_message("executed command.")
 
         self.queue_message(
             phone_number, command_response.get_message())
-        self.log_info_message(
+        self.logger.log_info_message(
             "Sent message: " + command_response.get_message() + " to " + phone_number)
 
         return command_response.get_message(), state_changed
@@ -469,7 +593,7 @@ class RelayController(object):
         """
         Restarts the Pi
         """
-        self.log_info_message("RESTARTING. Turning off relay")
+        self.logger.log_info_message("RESTARTING. Turning off relay")
         self.heater_relay.switch_low()
         utilities.restart()
 
@@ -477,10 +601,10 @@ class RelayController(object):
         """
         Shuts down the Pi
         """
-        self.log_info_message("SHUTDOWN: Turning off relay.")
+        self.logger.log_info_message("SHUTDOWN: Turning off relay.")
         self.heater_relay.switch_low()
 
-        self.log_info_message("SHUTDOWN: Shutting down piWarmer.")
+        self.logger.log_info_message("SHUTDOWN: Shutting down piWarmer.")
         utilities.shutdown()
 
     def clear_queue(self, queue):
@@ -491,7 +615,7 @@ class RelayController(object):
             return False
 
         while not queue.empty():
-            self.log_info_message("cleared message from queue.")
+            self.logger.log_info_message("cleared message from queue.")
             queue.get()
 
     def monitor_gas_sensor(self):
@@ -507,7 +631,7 @@ class RelayController(object):
         detected = self.__sensors__.current_gas_sensor_reading.is_gas_detected
         current_level = self.__sensors__.current_gas_sensor_reading.current_value
 
-        self.log_info_message("Detected: " + str(detected) +
+        self.logger.log_info_message("Detected: " + str(detected) +
                               ", Level=" + str(current_level))
 
         # If gas is detected, send an immediate warning to
@@ -518,17 +642,17 @@ class RelayController(object):
             status = "WARNING!! GAS DETECTED!!! Level = " + \
                 str(current_level)
 
-            if self.heater_relay.get_status() == 1:
+            if self.relay_controller.get_status():
                 status += ", TURNING HEATER OFF."
                 # clear the queue if it has a bunch of no warnings in it
 
-            self.log_warning_message(status)
+            self.logger.log_warning_message(status)
             self.gas_sensor_queue.put(
                 GAS_WARNING + ", level=" + str(current_level))
-            self.heater_queue.put(OFF)
+            self.logger.heater_queue.put(OFF)
             self.queue_message_to_all_numbers(status)
         else:
-            self.log_info_message("Sending OK into queue", False)
+            self.logger.log_info_message("Sending OK into queue", False)
             self.gas_sensor_queue.put(GAS_OK + ", level=" + str(current_level))
 
     def initialize_modem(self, retries=4, seconds_between_retries=10):
@@ -543,14 +667,14 @@ class RelayController(object):
 
         while retries > 0 and serial_connection is None:
             try:
-                self.log_info_message(
+                self.logger.log_info_message(
                     "Opening on " + self.configuration.cell_serial_port)
 
                 serial_connection = serial.Serial(
                     self.configuration.cell_serial_port,
                     self.configuration.cell_baud_rate)
             except:
-                self.log_warning_message(
+                self.logger.log_warning_message(
                     "SERIAL DEVICE NOT LOCATED."
                     + " Try changing /dev/ttyUSB0 to different USB port"
                     + " (like /dev/ttyUSB1) in configuration file or"
@@ -563,23 +687,7 @@ class RelayController(object):
 
         return serial_connection
 
-    def stop_heater_timer(self):
-        """
-        Stops the heater timer.
-        """
 
-        self.log_info_message("Cancelling the heater shutoff timer.")
-        self.__heater_shutoff_timer__ = None
-
-    def start_heater_timer(self):
-        """
-        Starts the shutdown timer for the heater.
-        """
-        self.log_info_message("Starting the heater shutoff timer.")
-        self.__heater_shutoff_timer__ = time.time(
-        ) + (self.configuration.max_minutes_to_run * 60)
-
-        return True
 
     def service_gas_sensor_queue(self):
         """
@@ -592,9 +700,9 @@ class RelayController(object):
                 gas_sensor_status = self.gas_sensor_queue.get()
 
                 if gas_sensor_status is None:
-                    self.log_warning_message("Gas sensor was None.")
+                    self.logger.log_warning_message("Gas sensor was None.")
                 else:
-                    self.log_info_message("Q:" + gas_sensor_status, False)
+                    self.logger.log_info_message("Q:" + gas_sensor_status, False)
 
                 # print "QUEUE: " + myLEDqstatus
                 if GAS_WARNING in gas_sensor_status:
@@ -602,11 +710,11 @@ class RelayController(object):
                     if not self.gas_detected:
                         gas_status = gas_sensor_status
 
-                        if self.heater_relay.get_status() == 1:
+                        if self.relay_controller.get_status():
                             gas_status += "SHUTTING HEATER DOWN"
 
                         self.queue_message_to_all_numbers(gas_status)
-                        self.log_warning_message("Turning detected flag on.")
+                        self.logger.log_warning_message("Turning detected flag on.")
                         self.gas_detected = True
 
                     # Force the heater off command no matter
@@ -616,66 +724,13 @@ class RelayController(object):
                     if self.gas_detected:
                         cleared_message = "Gas warning cleared. " + gas_sensor_status
                         self.queue_message_to_all_numbers(cleared_message)
-                        self.log_info_message("Turning detected flag off.")
+                        self.logger.log_info_message("Turning detected flag off.")
                         self.gas_detected = False
         except Queue.Empty:
             pass
 
         return self.gas_detected
 
-    def __stop_heater__(self):
-        """
-        Stops the heater.
-        """
-        self.log_info_message("__stop_heater__::switch_low()")
-        self.heater_relay.switch_low()
-        self.log_info_message("__stop_heater__::stop_heater_timer()")
-        self.stop_heater_timer()
-
-    def __start_heater__(self):
-        """
-        Starts the heater.
-        """
-        self.log_info_message("__start_heater__::switch_high()")
-        self.heater_relay.switch_high()
-        self.log_info_message("__start_heater__::start_heater_timer()")
-        self.start_heater_timer()
-
-    def service_heater_queue(self):
-        """
-        Services the queue from the heater service thread.
-        """
-
-        # Check to see if the timer has expired.
-        # If so, then add it to the action.
-        if self.__heater_shutoff_timer__ is not None \
-                and self.__heater_shutoff_timer__ < time.time():
-            self.heater_queue.put(MAX_TIME)
-        elif self.__heater_shutoff_timer__ is None \
-                and self.heater_relay.get_status() == 1:
-            self.log_warning_message(
-                "Heater should not be on, but the PIN is still active... attempting shutdown.")
-            self.heater_queue.put(OFF)
-
-        # check the queue to deal with various issues,
-        # such as Max heater time and the gas sensor being tripped
-        while not self.heater_queue.empty():
-            try:
-                status_queue = self.heater_queue.get_nowait()
-
-                if ON in status_queue:
-                    self.__start_heater__()
-
-                if OFF in status_queue:
-                    self.queue_message_to_all_numbers("Heater turned off.")
-                    self.__stop_heater__()
-
-                if MAX_TIME in status_queue:
-                    self.queue_message_to_all_numbers(
-                        "Max time reached. Heater turned OFF")
-                    self.__stop_heater__()
-            except Queue.Empty:
-                pass
 
     def process_pending_text_messages(self):
         """
@@ -708,14 +763,14 @@ class RelayController(object):
                 self.fona_manager.delete_message(message)
                 response, state_changed = self.process_message(
                     message.message_text, message.sender_number)
-                self.log_info_message(response)
+                self.logger.log_info_message(response)
 
                 # If the command did something to the unit
                 # stop processing other commands
                 if state_changed:
                     break
 
-            self.log_info_message(
+            self.logger.log_info_message(
                 "Found " + str(total_message_count)
                 + " messages, processed " + str(messages_processed_count))
 
@@ -730,14 +785,14 @@ class RelayController(object):
 
         cbc = self.fona_manager.battery_condition()
 
-        self.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" +
+        self.logger.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" +
                               str(cbc.get_capacity_remaining()))
 
         if not cbc.is_battery_ok():
             low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + \
                 str(cbc.get_percent_battery()) + "%"
             self.queue_message_to_all_numbers(low_battery_message)
-            self.log_warning_message(low_battery_message)
+            self.logger.log_warning_message(low_battery_message)
 
     def run_servicer(self, service_callback, service_name):
         """
@@ -745,7 +800,7 @@ class RelayController(object):
         """
 
         if service_callback is None:
-            self.log_warning_message("Unable to service " + service_name)
+            self.logger.log_warning_message("Unable to service " + service_name)
 
         try:
             service_callback()
@@ -753,7 +808,7 @@ class RelayController(object):
             print "Stopping due to CTRL+C"
             exit()
         except:
-            self.log_warning_message(
+            self.logger.log_warning_message(
                 "Exception while servicing " + service_name)
             print "Error:", sys.exc_info()[0]
 
@@ -761,7 +816,7 @@ class RelayController(object):
         """
         Service loop to run the PiWarmer
         """
-        self.log_info_message('Press Ctrl-C to quit.')
+        self.logger.log_info_message('Press Ctrl-C to quit.')
 
         # This can be safely used off the main thread.
         # and writes into the MPqueue...
@@ -776,8 +831,7 @@ class RelayController(object):
         while True:
             self.run_servicer(self.service_gas_sensor_queue,
                               "Gas sensor queue")
-            self.run_servicer(self.service_heater_queue,
-                              "Heater request queue")
+            self.relay_controller.update()
             self.run_servicer(self.process_pending_text_messages,
                               "Incoming request queue")
             self.fona_manager.update()
@@ -796,7 +850,7 @@ if __name__ == '__main__':
     doctest.testmod()
     CONFIG = PiWarmerConfiguration.PiWarmerConfiguration()
 
-    CONTROLLER = RelayController(CONFIG, logging.getLogger("Controller"))
+    CONTROLLER = CommandProcessor(CONFIG, logging.getLogger("Controller"))
 
     CONTROLLER.run_pi_warmer()
 
