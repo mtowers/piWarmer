@@ -6,7 +6,7 @@ the Fona in a thread safe way.
 import threading
 import time
 from multiprocessing import Queue as MPQueue
-
+import text
 import lib.local_debug as local_debug
 import lib.fona as fona
 from lib.recurring_task import RecurringTask
@@ -23,8 +23,6 @@ class FonaManager(object):
     and other monitoring of the device.
     """
 
-    CHECK_SIGNAL = "SIGNAL"
-    CHECK_BATTERY = "BATTERY"
     CHECK_SIGNAL_INTERVAL = 60  # Once a minute
     CHECK_BATTERY_INTERVAL = 60 * 5  # Every five minutes
     DEFAULT_RETRY_ATTEMPTS = 4
@@ -162,10 +160,10 @@ class FonaManager(object):
             while not self.__update_status_queue__.empty():
                 command = self.__update_status_queue__.get()
 
-                if self.CHECK_BATTERY in command and not battery_checked:
+                if text.CHECK_BATTERY in command and not battery_checked:
                     self.__update_battery_state__()
                     battery_checked = True
-                if self.CHECK_SIGNAL in command and not signal_checked:
+                if text.CHECK_SIGNAL in command and not signal_checked:
                     self.__update_signal_strength__()
                     signal_checked = True
         except:
@@ -213,14 +211,14 @@ class FonaManager(object):
         Triggers the battery state to be checked.
         """
 
-        self.__update_status_queue__.put(self.CHECK_BATTERY)
+        self.__update_status_queue__.put(text.CHECK_BATTERY)
 
     def __trigger_check_signal__(self):
         """
         Triggers the signal to be checked.
         """
 
-        self.__update_status_queue__.put(self.CHECK_SIGNAL)
+        self.__update_status_queue__.put(text.CHECK_SIGNAL)
 
     def __init__(self,
                  logger,

@@ -107,5 +107,4 @@ if __name__ == '__main__':
     while True:
         IS_GAS_DETECTED = SENSOR.update()
         print "LVL:" + str(SENSOR.current_value) + ", " + str(IS_GAS_DETECTED)
-        # print str(sensor.update(offset))
         time.sleep(0.2)

@@ -192,7 +192,7 @@ class Fona(object):
 
         if self.__use_gpio_pins__():
             pin_value = GPIO.input(self.power_status_pin)
-            self.__log_info__(
+            self.__logger__.log_info_message(
                 "Power... PIN=" + str(self.power_status_pin) + ", VAL=" + str(pin_value))
             return GPIO.input(self.power_status_pin) == GPIO.HIGH
 
@@ -230,7 +230,7 @@ class Fona(object):
         """
         Returns an object representing the current battery state.
         """
-        self.__log_info__("Sending CBC command")
+        self.__logger__.log_info_message("Sending CBC command")
         time.sleep(5)
         command_result = self.__send_command__("AT+CBC")
 
@@ -262,23 +262,23 @@ class Fona(object):
         if cleaned_number is None or text is None:
             return
 
-        self.__log_info__("Setting receiving number...")
+        self.__logger__.log_info_message("Setting receiving number...")
         self.__set_sms_mode__()
         self.__write_to_fona__('\r\r\n')
         if self.__wait_for_command_response__:
-            self.__log_info__(self.__read_from_fona__(5))
+            self.__logger__.log_info_message(self.__read_from_fona__(5))
         self.__write_to_fona__('AT+CMGS="' + cleaned_number + '"')
         self.__wait_for_command_response__()
-        self.__log_info__(self.__read_from_fona__(5))
+        self.__logger__.log_info_message(self.__read_from_fona__(5))
         self.__write_to_fona__('\r')
         self.__wait_for_command_response__()
-        self.__log_info__(self.__read_from_fona__(5))
-        self.__log_info__(self.__write_to_fona__(text + '\x1a'))
+        self.__logger__.log_info_message(self.__read_from_fona__(5))
+        self.__logger__.log_info_message(self.__write_to_fona__(text + '\x1a'))
         self.__wait_for_command_response__()
 
         self.command_history.append("self.read_from_fona()")
-        self.__log_info__(self.__read_from_fona__(2))
-        self.__log_info__("Check phone")
+        self.__logger__.log_info_message(self.__read_from_fona__(2))
+        self.__logger__.log_info_message("Check phone")
 
         return True
 
@@ -351,37 +351,15 @@ class Fona(object):
                         "time.sleep(" + str(time.time() - start_time) + ")")
                     write_result = self.__write_to_fona__(command)
                     start_time = time.time()
-                    self.__log_info__(write_result)
+                    self.__logger__.log_info_message(write_result)
 
-                    self.__log_info__(self.__read_from_fona__(
+                    self.__logger__.log_info_message(self.__read_from_fona__(
                         DEFAULT_RESPONSE_READ_TIMEOUT))
             except:
-                self.__log_warning__("ERROR")
+                self.__logger__.log_warning_message("ERROR")
 
         for command in self.command_history:
-            self.__log_info__(command)
-
-    def __log_info__(self, log_message):
-        """
-        Logs info if there is a logger.
-        """
-
-        if log_message is not None:
-            print "INFO:" + log_message
-
-        if self.__logger__ is not None and log_message is not None:
-            self.__logger__.warn(log_message)
-
-    def __log_warning__(self, log_message):
-        """
-        Logs a warning if there is a logger.
-        """
-
-        if log_message is not None:
-            print "WARN:" + log_message
-
-        if self.__logger__ is not None and log_message is not None:
-            self.__logger__.warn(log_message)
+            self.__logger__.log_info_message(command)
 
     def __init__(self,
                  logger,
@@ -428,10 +406,10 @@ class Fona(object):
         """
 
         if not self.__use_gpio_pins__():
-            self.__log_info__("Skipping GPIO init.")
+            self.__logger__.log_info_message("Skipping GPIO init.")
             return False
 
-        self.__log_info__("Setting GPIO input modes")
+        self.__logger__.log_info_message("Setting GPIO input modes")
 
         # Set the RI pin to pulse low when
         # a text message is received
@@ -465,11 +443,11 @@ class Fona(object):
         """
         Write text to the Fona in a safe manner.
         """
-        self.__log_info__("Checking connection")
+        self.__logger__.log_info_message("Checking connection")
         if self.serial_connection is None:
             return "NO CON"
 
-        self.__log_info__("Writting to serial")
+        self.__logger__.log_info_message("Writting to serial")
         num_bytes_written = self.serial_connection.write(text)
         self.serial_connection.flush()
 
@@ -477,9 +455,9 @@ class Fona(object):
             self.command_history.append(
                 "self.write_to_fona(" + utilities.escape(text) + ")")
 
-        self.__log_info__("Checking return")
-        self.__log_info__("Wrote " + str(num_bytes_written) +
-                          ", expected " + str(len(text)))
+        self.__logger__.log_info_message("Checking return")
+        self.__logger__.log_info_message("Wrote " + str(num_bytes_written) +
+                                         ", expected " + str(len(text)))
 
         self.__wait_for_command_response__()
 
@@ -499,16 +477,16 @@ class Fona(object):
         if self.serial_connection is None:
             return "NOCON"
 
-        self.__log_info__("   starting read")
+        self.__logger__.log_info_message("   starting read")
         while self.serial_connection.inWaiting() > 0:
-            self.__log_info__("******")
+            self.__logger__.log_info_message("******")
             read_buffer += self.serial_connection.read(1)
             time_elapsed = time.time() - start_time
             if time_elapsed > response_timeout:
-                self.__log_warning__("TIMEOUT")
+                self.__logger__.log_warning_message("TIMEOUT")
                 break
 
-        self.__log_info__("   done")
+        self.__logger__.log_info_message("   done")
         return read_buffer
 
     def __send_command__(self, com, add_eol=True):
@@ -534,7 +512,7 @@ class Fona(object):
                 msg = msg.replace("\r", "")
                 msg = msg.replace("\n", "")
                 if msg != "":
-                    self.__log_info__(msg)
+                    self.__logger__.log_info_message(msg)
                     ret.append(msg)
 
             self.__modem_access_lock__.release()
@@ -577,7 +555,7 @@ class Fona(object):
             elapsed_time = time.time() - start_time
 
             if elapsed_time > 10:
-                self.__log_warning__("TIMEOUT")
+                self.__logger__.log_warning_message("TIMEOUT")
                 break
 
         return read_text
@@ -605,10 +583,10 @@ class Fona(object):
 
         events_cleared = 0
         while not self.__message_waiting_queue__.empty():
-            self.__log_info__("Clearing queue.")
+            self.__logger__.log_info_message("Clearing queue.")
             event = self.__message_waiting_queue__.get()
             events_cleared += 1
-            self.__log_info__("Q:" + event)
+            self.__logger__.log_info_message("Q:" + event)
 
         return events_cleared
 
