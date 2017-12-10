@@ -4,16 +4,15 @@ import sys
 import time
 import Queue
 from multiprocessing import Queue as MPQueue
-
 import serial  # Requires "pyserial"
 import text
 from fona_manager import FonaManager
 from Sensors import Sensors
 from RelayController import RelayManager
+from lib.recurring_task import RecurringTask
 import lib.utilities as utilities
 import lib.local_debug as local_debug
-from lib.recurring_task import RecurringTask
-
+from lib.logger import Logger
 
 VALID_COMMANDS = {text.HEATER_OFF,
                   text.HEATER_ON,
@@ -161,10 +160,10 @@ class CommandProcessor(object):
         status_text = "Heater is "
 
         if self.relay_controller.is_relay_on():
-            status_text += "ON. "
+            status_text += text.HEATER_ON + ". "
             status_text += self.relay_controller.get_heater_time_remaining()
         else:
-            status_text += "OFF"
+            status_text += text.HEATER_OFF
 
         status_text += "."
 
@@ -746,7 +745,7 @@ if __name__ == '__main__':
     doctest.testmod()
     CONFIG = PiWarmerConfiguration.PiWarmerConfiguration()
 
-    CONTROLLER = CommandProcessor(CONFIG, logging.getLogger("Controller"))
+    CONTROLLER = CommandProcessor(CONFIG, Logger(logging.getLogger("Controller")))
 
     CONTROLLER.run_pi_warmer()
 

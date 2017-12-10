@@ -276,7 +276,6 @@ class Fona(object):
         self.__logger__.log_info_message(self.__write_to_fona__(text + '\x1a'))
         self.__wait_for_command_response__()
 
-        self.command_history.append("self.read_from_fona()")
         self.__logger__.log_info_message(self.__read_from_fona__(2))
         self.__logger__.log_info_message("Check phone")
 
@@ -358,20 +357,14 @@ class Fona(object):
             except:
                 self.__logger__.log_warning_message("ERROR")
 
-        for command in self.command_history:
-            self.__logger__.log_info_message(command)
-
     def __init__(self,
                  logger,
                  serial_connection,
                  power_status_pin,
-                 ring_indicator_pin,
-                 keep_command_history=False):
+                 ring_indicator_pin):
 
         self.__logger__ = logger
-        self.command_history = []
         self.__modem_access_lock__ = threading.Lock()
-        self.__keep_command_history__ = keep_command_history
         self.serial_connection = serial_connection
         self.power_status_pin = power_status_pin
         self.ring_indicator_pin = ring_indicator_pin
@@ -451,10 +444,6 @@ class Fona(object):
         num_bytes_written = self.serial_connection.write(text)
         self.serial_connection.flush()
 
-        if self.__keep_command_history__:
-            self.command_history.append(
-                "self.write_to_fona(" + utilities.escape(text) + ")")
-
         self.__logger__.log_info_message("Checking return")
         self.__logger__.log_info_message("Wrote " + str(num_bytes_written) +
                                          ", expected " + str(len(text)))
@@ -469,10 +458,6 @@ class Fona(object):
         """
         read_buffer = ""
         start_time = time.time()
-
-        if self.__keep_command_history__:
-            self.command_history.append(
-                "self.read_from_fona(" + str(response_timeout) + ")")
 
         if self.serial_connection is None:
             return "NOCON"
@@ -497,8 +482,6 @@ class Fona(object):
             command = com
             if add_eol:
                 command += '\r\r\n '
-            self.command_history.append(
-                "self.send_command(" + utilities.escape(command) + ")")
 
             if self.serial_connection is not None:
                 self.serial_connection.write(command)
@@ -564,7 +547,6 @@ class Fona(object):
         """
         Waits until the command has a response
         """
-        self.command_history.append("self.wait_until_fona_command_response()")
 
         if self.serial_connection is None:
             return False
@@ -593,6 +575,8 @@ class Fona(object):
 
 if __name__ == '__main__':
     import serial
+    import logging
+    from logger import Logger
 
     if not local_debug.is_debug():
         PHONE_NUMBER = "2066795094"  # input("Phone number>")
@@ -604,11 +588,10 @@ if __name__ == '__main__':
     else:
         SERIAL_CONNECTION = serial.Serial('/dev/ttyUSB0', 9600)
 
-    FONA = Fona(None,
+    FONA = Fona(Logger(logging.getLogger("fona")),
                 SERIAL_CONNECTION,
                 DEFAULT_POWER_STATUS_PIN,
-                DEFAULT_RING_INDICATOR_PIN,
-                None)
+                DEFAULT_RING_INDICATOR_PIN)
 
     if not FONA.is_power_on():
         print "Power is off.."
