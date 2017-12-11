@@ -103,7 +103,7 @@ def escape(text):
     ''
     """
 
-    return text.replace('\r', '\\r').replace('\n', '\\n').replace('\x1a', '\\x1a')
+    return str(text).replace('\r', '\\r').replace('\n', '\\n').replace('\x1a', '\\x1a')
 
 
 def get_cleaned_phone_number(dirty_number):
