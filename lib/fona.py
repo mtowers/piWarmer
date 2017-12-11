@@ -265,9 +265,11 @@ class Fona(object):
         self.__logger__.log_info_message("Setting receiving number...")
         self.__set_sms_mode__()
         self.__write_to_fona__('\r\r\n')
+        self.__logger__.log_info_message("Wait for resp:")
         if self.__wait_for_command_response__:
             self.__logger__.log_info_message(self.__read_from_fona__(5))
         self.__write_to_fona__('AT+CMGS="' + cleaned_number + '"')
+        self.__logger__.log_info_message("Wait for resp 2:")
         self.__wait_for_command_response__()
         self.__logger__.log_info_message(self.__read_from_fona__(5))
         self.__write_to_fona__('\r')
@@ -450,6 +452,8 @@ class Fona(object):
 
         self.__wait_for_command_response__()
 
+        self.__logger__.log_info_message("Done with wait_for_command_repsonse()")
+
         return num_bytes_written
 
     def __read_from_fona__(self, response_timeout=2):
@@ -464,7 +468,6 @@ class Fona(object):
 
         self.__logger__.log_info_message("   starting read")
         while self.serial_connection.inWaiting() > 0:
-            self.__logger__.log_info_message("******")
             read_buffer += self.serial_connection.read(1)
             time_elapsed = time.time() - start_time
             if time_elapsed > response_timeout:
@@ -472,6 +475,7 @@ class Fona(object):
                 break
 
         self.__logger__.log_info_message("   done")
+        self.__logger__.log_info_message("BUFFER:" + read_buffer)
         return read_buffer
 
     def __send_command__(self, com, add_eol=True):

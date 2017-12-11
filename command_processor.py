@@ -294,7 +294,8 @@ class CommandProcessor(object):
         if self.fona_manager is not None and phone_number is not None and message is not None:
             self.logger.log_info_message(
                 "MSG - " + phone_number + " : " + utilities.escape(message))
-            self.fona_manager.send_message(phone_number, message)
+            if not self.configuration.test_mode:
+                self.fona_manager.send_message(phone_number, message)
 
             return True
 

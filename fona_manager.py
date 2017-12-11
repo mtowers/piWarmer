@@ -2,7 +2,7 @@
 Module to abstract handling and updating
 the Fona in a thread safe way.
 """
-
+import sys
 import threading
 import time
 from multiprocessing import Queue as MPQueue
@@ -92,7 +92,7 @@ class FonaManager(object):
         except:
             exception_message = "ERROR fetching messages!"
             print exception_message
-            self.__logger__.warning(exception_message)
+            self.__logger__.log_warning_message(exception_message)
         self.__lock__.release()
 
         return results
@@ -110,7 +110,7 @@ class FonaManager(object):
         except:
             exception_message = "ERROR deleting messages!"
             print exception_message
-            self.__logger__.warning(exception_message)
+            self.__logger__.log_warning_message(exception_message)
         self.__lock__.release()
 
         return num_deleted
@@ -126,7 +126,7 @@ class FonaManager(object):
         except:
             exception_message = "ERROR deleting message!"
             print exception_message
-            self.__logger__.warning(exception_message)
+            self.__logger__.log_warning_message(exception_message)
         self.__lock__.release()
 
     def __update_battery_state__(self):
@@ -169,7 +169,7 @@ class FonaManager(object):
         except:
             exception_message = "ERROR updating signal & battery status!"
             print exception_message
-            self.__logger__.warning(exception_message)
+            self.__logger__.log_warning_message(exception_message)
 
         self.__lock__.release()
 
@@ -184,23 +184,27 @@ class FonaManager(object):
         self.__lock__.acquire(True)
         try:
             while not self.__send_message_queue__.empty():
+                self.__logger__.log_info_message("__send_message_queue__")
                 message_to_send = self.__send_message_queue__.get()
+                self.__logger__.log_info_message("done: __send_message_queue__")
 
                 try:
+                    self.__logger__.log_info_message("sending..")
                     self.__fona__.send_message(
                         message_to_send[0], message_to_send[1])
+                    self.__logger__.log_info_message("done sending")
                 except:
-                    self.__logger__.warning(
-                        "Exception servicing outgoing message.")
+                    self.__logger__.log_warning_message(
+                        "Exception servicing outgoing message:" +str(sys.exc_info()[0]))
 
                     message_to_send[3] -= 1
                     if message_to_send[3] > 0:
                         messages_to_retry.append(message_to_send)
         except:
-            self.__logger__.warning("Exception servicing outgoing queue")
+            self.__logger__.log_warning_message("Exception servicing outgoing queue:" + str(sys.exc_info()[0]))
 
         for message_to_retry in messages_to_retry:
-            self.__logger__.warning(
+            self.__logger__.log_warning_message(
                 "Adding message back for up to" + str(message_to_retry[3]) + " more retries.")
             self.__send_message_queue__.put(message_to_retry)
 
