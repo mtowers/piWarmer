@@ -12,7 +12,7 @@ import local_debug
 if not local_debug.is_debug():
     import smbus
 
-DEFAULT_SMBUS = 0
+DEFAULT_SMBUS = 1
 DEFAULT_1602_ADDRESS = 0x27
 
 class LcdDisplay(object):
@@ -22,7 +22,7 @@ class LcdDisplay(object):
     Class to abstract a 1602 LCD display
     """
 
-    def __init__(self, sm_bus_id, adr, bl):
+    def __init__(self, sm_bus_id=DEFAULT_SMBUS, adr=DEFAULT_1602_ADDRESS, bl=1):
         """
         Intializer for a SunFounder 1602
 
@@ -136,7 +136,6 @@ class LcdDisplay(object):
             self.__smbus__.write_byte(DEFAULT_1602_ADDRESS, 0x08)
             self.__smbus__.close()
 
-
     def write(self, pos_x, pos_y, text_to_write):
         """
         Writes to the screen.
@@ -166,5 +165,5 @@ class LcdDisplay(object):
 
 if __name__ == '__main__':
     LCD = LcdDisplay(1, DEFAULT_1602_ADDRESS, 1)  # Slave with background light
-    LCD.write(4, 0, 'Hello')
-    LCD.write(7, 1, 'world!')
+    LCD.write(0, 0, 'CSQ:9 MARGINAL')
+    LCD.write(0, 1, 'BAT:98% V:4.12')

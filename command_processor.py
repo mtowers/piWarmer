@@ -13,6 +13,7 @@ from lib.recurring_task import RecurringTask
 import lib.utilities as utilities
 import lib.local_debug as local_debug
 from lib.logger import Logger
+from lib.sf_1602_lcd import LcdDisplay
 
 VALID_COMMANDS = {text.HEATER_OFF,
                   text.HEATER_ON,
@@ -50,6 +51,23 @@ class CommandProcessor(object):
     Class to control a power relay based on SMS commands.
     """
 
+    def __update_lcd__(self):
+        """
+        Updates the LCD screen.
+        """
+
+        signal_strength = self.fona_manager.signal_strength()
+        signal_text = "CSQ:" + str(signal_strength.get_signal_strength()) + \
+                      " " + signal_strength.classify_strength()
+
+        battery = self.fona_manager.battery_condition()
+        battery_text = "BAT:" + str(battery.battery_percent) + "% V:" + \
+                       str(battery.get_capacity_remaining() / 100)
+        self.__lcd__.clear()
+        self.__lcd__.write(0, 0, signal_text)
+        self.__lcd__.write(0, 1, battery_text)
+
+
     def run_pi_warmer(self):
         """
         Service loop to run the PiWarmer
@@ -66,6 +84,8 @@ class CommandProcessor(object):
         RecurringTask("battery_check", 60 * 5,
                       self.__monitor_fona_health__, self.logger)
 
+        RecurringTask("update_lcd", 10, self.__update_lcd__, self.logger)
+
         while True:
             self.__run_servicer__(self.__service_gas_sensor_queue__,
                                   "Gas sensor queue")
@@ -73,6 +93,7 @@ class CommandProcessor(object):
             self.__run_servicer__(self.__process_pending_text_messages__,
                                   "Incoming request queue")
             self.fona_manager.update()
+
 
     def is_gas_detected(self):
         """ Returns True if gas is detected. """
@@ -103,6 +124,9 @@ class CommandProcessor(object):
 
         self.configuration = configuration
         self.logger = logger
+        self.__lcd__ = LcdDisplay()
+        self.__lcd__.clear()
+        self.__lcd__.write(0, 0, "Initializing...")
         self.__is_gas_detected__ = False
         self.__system_start_time__ = time.time()
         self.__sensors__ = Sensors(configuration)
@@ -133,6 +157,8 @@ class CommandProcessor(object):
         self.__queue_message_to_all_numbers__("piWarmer monitoring started."
                                               + "\n" + self.__get_help_status__())
         self.__queue_message_to_all_numbers__(self.__get_status__())
+        self.__lcd__.clear()
+        self.__lcd__.write(0, 0, "Ready")
 
     def __clear_existing_messages__(self):
         """ Clear all of the existing messages off tdhe SIM card.
