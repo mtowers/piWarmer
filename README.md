@@ -99,6 +99,28 @@ For a complete set of installation instructions, visit
 * Red to +5VO
 * Black to GPIO GND
 
+### Status Display
+
+#### Additional Work
+
+You may need to make to "Y" pig tails to support the additional
+i2c device.
+
+While the Raspberry Pi can support a number of i2c devices, and
+all of the devices used are at different offsets, even with the
+IO hat, there are only connectors for two devices.
+
+If you intend on using ALL THREE i2c devices (Gas Sensor, Light Sensor, and LCD)
+then a splitter for the SDAI and SCLI lines will need to be made.
+
+If you intend to use two or fewer, then no work needs to be done, and
+any free SDA/SCL pins may be used.
+
+* Red wire from LCD VCC to GPIO 5V
+* Black wire from LCD GND to GPIO GND
+* White wire from LCD SDA to GPIO SDA
+* Gray wire from LCD SCL to GPIO SCL
+
 ## Additional Links And Setup Notes
 
 **The MQ-2 needs to be installed with an analog-to-digital converter** You
@@ -154,9 +176,11 @@ issue
 
 ### For Optional Light Sensor
 
-** THIS CODE AND OPTION ARE NOT YET TESTED! **
-
 * [ ] [Adafruit Light Sensor](https://www.amazon.com/gp/product/B00XW2OFWW/ref=oh_aui_detailpage_o00_s00?ie=UTF8&psc=1)
+
+### For Optional Status Display
+
+* [ ] [SunFounder 1602 LCD](https://www.amazon.com/gp/product/B01E6N19YC/ref=oh_aui_detailpage_o01_s00?ie=UTF8&psc=1)
 
 ### Adapters
 
