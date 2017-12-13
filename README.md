@@ -180,7 +180,7 @@ issue
 
 ### For Optional Status Display
 
-* [ ] [SunFounder 1602 LCD](https://www.amazon.com)
+* [ ] [SunFounder 1602 LCD](https://www.amazon.com/gp/product/B01E6N19YC/ref=oh_aui_detailpage_o01_s00?ie=UTF8&psc=1)
 
 ### Adapters
 
