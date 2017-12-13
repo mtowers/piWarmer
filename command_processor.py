@@ -51,21 +51,69 @@ class CommandProcessor(object):
     Class to control a power relay based on SMS commands.
     """
 
+    def __write_to_lcd__(self, text_to_write):
+        """
+        Writes a string to the LCD.
+        """
+
+        if text_to_write is None:
+            return False
+
+        text_array = text_to_write.split('\n')
+
+        array_count = len(text_array)
+
+        if array_count <= 0:
+            return False
+
+        if array_count >= 1:
+            self.__lcd__.clear()
+            self.__lcd__.write(0, 0, text_array[0])
+
+        if array_count >= 2:
+            self.__lcd__.write(0, 1, text_array[1])
+
+
+        return True
+
     def __update_lcd__(self):
         """
         Updates the LCD screen.
         """
 
-        signal_strength = self.fona_manager.signal_strength()
-        signal_text = "CSQ:" + str(signal_strength.get_signal_strength()) + \
-                      " " + signal_strength.classify_strength()
-
-        battery = self.fona_manager.battery_condition()
-        battery_text = "BAT:" + str(battery.battery_percent) + "% V:" + \
-                       str(battery.get_capacity_remaining() / 100)
         self.__lcd__.clear()
-        self.__lcd__.write(0, 0, signal_text)
-        self.__lcd__.write(0, 1, battery_text)
+
+        try:
+            if self.__lcd_status_id__ == 0:
+                signal_strength = self.fona_manager.signal_strength()
+                signal_text = "CSQ:" + str(signal_strength.get_signal_strength()) + \
+                          " " + signal_strength.classify_strength()
+
+                battery = self.fona_manager.battery_condition()
+                battery_text = "BAT:" + str(battery.battery_percent) + "% V:" + \
+                           str(battery.get_capacity_remaining() / 100)
+
+                self.__lcd__.write(0, 0, signal_text)
+                self.__lcd__.write(0, 1, battery_text)
+            elif self.__lcd_status_id__ == 1:
+                self.__write_to_lcd__(self.__get_heater_status__())
+            elif self.__lcd_status_id__ == 2:
+                self.__write_to_lcd__(self.__get_gas_sensor_status__())
+            elif self.__lcd_status_id__ == 3:
+                self.__write_to_lcd__(self.__get_light_status__())
+            elif self.__lcd_status_id__ == 4:
+                self.__write_to_lcd__(self.__get_temp_probe_status__())
+            else:
+                self.__lcd_status_id__ = -1
+                uptime = time.time() - self.__system_start_time__
+
+                self.__lcd__.write(0, 0, "UPTIME:")
+                self.__lcd__.write(0, 1, utilities.get_time_text(uptime))
+        except:
+            self.__lcd__.write(0, 0, "ERROR: LCD_ID=" + str(self.__lcd_status_id__))
+
+        self.__lcd_status_id__ = self.__lcd_status_id__ + 1
+            
 
 
     def run_pi_warmer(self):
@@ -84,7 +132,7 @@ class CommandProcessor(object):
         RecurringTask("battery_check", 60 * 5,
                       self.__monitor_fona_health__, self.logger)
 
-        RecurringTask("update_lcd", 10, self.__update_lcd__, self.logger)
+        RecurringTask("update_lcd", 5, self.__update_lcd__, self.logger)
 
         while True:
             self.__run_servicer__(self.__service_gas_sensor_queue__,
@@ -124,6 +172,7 @@ class CommandProcessor(object):
 
         self.configuration = configuration
         self.logger = logger
+        self.__lcd_status_id__ = 0
         self.__lcd__ = LcdDisplay()
         self.__lcd__.clear()
         self.__lcd__.write(0, 0, "Initializing...")
@@ -186,7 +235,7 @@ class CommandProcessor(object):
         status_text = "Heater is "
 
         if self.relay_controller.is_relay_on():
-            status_text += text.HEATER_ON + ". "
+            status_text += text.HEATER_ON + "\n"
             status_text += self.relay_controller.get_heater_time_remaining()
         else:
             status_text += text.HEATER_OFF
@@ -221,13 +270,11 @@ class CommandProcessor(object):
                 or not self.configuration.is_mq2_enabled:
             return "Gas sensor NOT enabled."
 
-        status_text = "Gas sensor enabled, current reading=" + \
+        status_text = "Gas reading=" + \
             str(self.__sensors__.current_gas_sensor_reading.current_value)
 
         if self.__sensors__.current_gas_sensor_reading.is_gas_detected:
-            status_text += ". DANGER! GAS DETECTED!"
-        else:
-            status_text += "."
+            status_text += "\nDANGER! GAS DETECTED!"
 
         return status_text
 
@@ -237,7 +284,7 @@ class CommandProcessor(object):
         """
 
         if self.__sensors__.current_temperature_sensor_reading is not None:
-            return "Temperature is " \
+            return "TEMP: " \
                    + str(self.__sensors__.current_temperature_sensor_reading) + "F"
 
         return "Temp probe not enabled."
@@ -248,11 +295,10 @@ class CommandProcessor(object):
         """
 
         if self.__sensors__.current_light_sensor_reading is not None:
-            status = "Hangar has " + \
-                     str(int(self.__sensors__.current_light_sensor_reading.lux)) + \
-                     " lumens of light.\n"
+            status = str(int(self.__sensors__.current_light_sensor_reading.lux)) + \
+                     " LUX of light.\n"
             status += "Hangar is "
-            brightness = "Bright. Did you leave the lights on?"
+            brightness = "Bright. Lights on?"
 
             if self.__sensors__.current_light_sensor_reading.lux <= self.configuration.hangar_dark:
                 brightness = "dark."
@@ -272,17 +318,20 @@ class CommandProcessor(object):
         Returns the status of the piWarmer.
         """
 
-        uptime = time.time() - self.__system_start_time__
+        try:
+            status = self.__get_heater_status__() + "\n"
+            status += self.__get_gas_sensor_status__() + "\n"
+            status += self.__get_light_status__() + "\n"
+            status += self.__get_temp_probe_status__() + "\n"
+            status += self.__get_fona_status__()
 
-        status = self.__get_heater_status__() + "\n"
-        status += self.__get_gas_sensor_status__() + "\n"
-        status += self.__get_light_status__() + "\n"
-        status += self.__get_temp_probe_status__() + "\n"
-        status += self.__get_fona_status__()
+            uptime = time.time() - self.__system_start_time__
 
-        if uptime > 60:
-            status += "\nSystem has been up for " + \
-                utilities.get_time_text(uptime)
+            if uptime > 60:
+                status += "\nSystem has been up for " + \
+                    utilities.get_time_text(uptime)
+        except:
+            status += "ERROR"
 
         return status
 
@@ -685,6 +734,12 @@ class CommandProcessor(object):
             for message in messages:
                 messages_processed_count += 1
                 self.fona_manager.delete_message(message)
+
+                if message.minutes_waiting() > 60:
+                    old_message = "MSG too old, " + str(message.minutes_waiting()) + " minutes old."
+                    self.queue_message_to_all_numbers(old_message)
+                    continue
+
                 response, state_changed = self.__process_message__(
                     message.message_text, message.sender_number)
                 self.logger.log_info_message(response)

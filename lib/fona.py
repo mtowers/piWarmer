@@ -4,6 +4,7 @@ Module to help with tha AdaFruit Fona modules
 import time
 import threading
 from multiprocessing import Queue as MPQueue
+import datetime
 import local_debug
 import utilities
 
@@ -17,6 +18,7 @@ DEFAULT_RESPONSE_READ_TIMEOUT = 5
 
 DEFAULT_RING_INDICATOR_PIN = 18  # (Physical... GPIO24)
 DEFAULT_POWER_STATUS_PIN = 16  # (Physical ..GPIO23)
+TIMEZONE_OFFSET = 8
 
 
 class BatteryCondition(object):
@@ -141,6 +143,14 @@ class SmsMessage(object):
         """
         return not self.error_state
 
+    def minutes_waiting(self):
+        """
+        How many hours between being sent
+        and received.
+        """
+
+        return (self.received_time - self.sent_time).days * 24 * 60
+
     def __init__(self,
                  message_header,
                  message_text):
@@ -148,11 +158,11 @@ class SmsMessage(object):
         Create the object.
         """
         self.message_id = None
-        self.message_date = None
-        self.message_time = None
         self.sender_number = None
         self.message_status = None
         self.message_text = None
+        self.received_time = datetime.datetime.now()
+        self.sent_time = None
 
         try:
             metadata_list = message_header.split(",")
@@ -160,12 +170,16 @@ class SmsMessage(object):
             message_id = message_id.rpartition(":")[2].strip()
             message_status = metadata_list[1]
             sender_number = metadata_list[2]
-            message_date = metadata_list[4]
-            message_time = metadata_list[5]
+            message_date = metadata_list[4].replace('"', '')
+            date_tokens = message_date.split('/')
+            message_time = metadata_list[5].split('-')[0]
+            time_tokens = message_time.split(':')
 
             self.message_id = message_id
-            self.message_date = message_date
-            self.message_time = message_time
+            self.sent_time = datetime.datetime.combine( \
+                                datetime.datetime(int("20" + date_tokens[0]), int(date_tokens[1]), int(date_tokens[2])), \
+                                datetime.time(int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2]))) \
+                             + datetime.timedelta(hours=TIMEZONE_OFFSET)
             self.sender_number = sender_number
             self.message_status = message_status
             self.message_text = message_text
@@ -618,11 +632,11 @@ if __name__ == '__main__':
 
             for message in FONA.get_messages():
                 print "ID:" + message.message_id
-                print "Date:" + message.message_date
-                print "Time:" + message.message_time
+                print "SENT:" + str(message.sent_time)
                 print "Num:" + message.sender_number
                 print "Stat:" + message.message_status
                 print "SMS:" + message.message_text
+                print "REC:" + str(message.received_time)
 
             FONA.delete_messages()
 
