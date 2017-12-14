@@ -5,7 +5,6 @@
 # TODO - Make sure strings can handle unicode
 # TODO - Make commands and help response customizable for Localization
 # TODO - Make "Quit" work
-# TODO - Add support for LCD status screen
 # TODO - Add documentation on all of "pip installs" required
 # TODO - Rename this to HangarBuddy or HangarRat
 # TODO - Create an "AutoUpdate" feature. Can probably be in the rc.local
@@ -80,7 +79,7 @@ class RelayManager(object):
             time_remaining = "No time"
 
         self.logger.log_info_message("adding remaining")
-        time_remaining += " remaining."
+        time_remaining += " left."
 
         self.logger.log_info_message("Done")
 

@@ -228,11 +228,13 @@ class FonaManager(object):
                  logger,
                  serial_connection,
                  power_status_pin,
-                 ring_indicator_pin):
+                 ring_indicator_pin,
+                 utc_offset):
         """
         Initializes the Fona.
         """
 
+        fona.TIMEZONE_OFFSET = utc_offset
         self.__logger__ = logger
         self.__lock__ = threading.Lock()
         self.__fona__ = fona.Fona(logger,
@@ -274,7 +276,8 @@ if __name__ == '__main__':
     FONA_MANAGER = FonaManager(None,
                                SERIAL_CONNECTION,
                                fona.DEFAULT_POWER_STATUS_PIN,
-                               fona.DEFAULT_RING_INDICATOR_PIN)
+                               fona.DEFAULT_RING_INDICATOR_PIN,
+                               fona.TIMEZONE_OFFSET)
 
     if not FONA_MANAGER.is_power_on():
         print "Power is off.."
@@ -284,7 +287,7 @@ if __name__ == '__main__':
     FONA_MANAGER.send_message(PHONE_NUMBER,
                               "Time:" + str(time.time()) + "\nPCT:"
                               + str(BATTERY_CONDITION.battery_percent)
-                              + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
+                              + "\nv:" + str(BATTERY_CONDITION.battery_voltage))
 
     SIGNAL_STRENGTH = FONA_MANAGER.signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()

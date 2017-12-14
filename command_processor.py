@@ -73,7 +73,6 @@ class CommandProcessor(object):
         if array_count >= 2:
             self.__lcd__.write(0, 1, text_array[1])
 
-
         return True
 
     def __update_lcd__(self):
@@ -87,11 +86,11 @@ class CommandProcessor(object):
             if self.__lcd_status_id__ == 0:
                 signal_strength = self.fona_manager.signal_strength()
                 signal_text = "CSQ:" + str(signal_strength.get_signal_strength()) + \
-                          " " + signal_strength.classify_strength()
+                    " " + signal_strength.classify_strength()
 
                 battery = self.fona_manager.battery_condition()
                 battery_text = "BAT:" + str(battery.battery_percent) + "% V:" + \
-                           str(battery.get_capacity_remaining() / 100)
+                    str(battery.get_voltage() / 100)
 
                 self.__lcd__.write(0, 0, signal_text)
                 self.__lcd__.write(0, 1, battery_text)
@@ -110,11 +109,10 @@ class CommandProcessor(object):
                 self.__lcd__.write(0, 0, "UPTIME:")
                 self.__lcd__.write(0, 1, utilities.get_time_text(uptime))
         except:
-            self.__lcd__.write(0, 0, "ERROR: LCD_ID=" + str(self.__lcd_status_id__))
+            self.__lcd__.write(0, 0, "ERROR: LCD_ID=" +
+                               str(self.__lcd_status_id__))
 
         self.__lcd_status_id__ = self.__lcd_status_id__ + 1
-            
-
 
     def run_pi_warmer(self):
         """
@@ -141,7 +139,6 @@ class CommandProcessor(object):
             self.__run_servicer__(self.__process_pending_text_messages__,
                                   "Incoming request queue")
             self.fona_manager.update()
-
 
     def is_gas_detected(self):
         """ Returns True if gas is detected. """
@@ -189,7 +186,8 @@ class CommandProcessor(object):
         self.fona_manager = FonaManager(self.logger,
                                         serial_connection,
                                         self.configuration.cell_power_status_pin,
-                                        self.configuration.cell_ring_indicator_pin)
+                                        self.configuration.cell_ring_indicator_pin,
+                                        self.configuration.utc_offset)
 
         # create heater relay instance
         self.relay_controller = RelayManager(configuration, logger,
@@ -296,7 +294,7 @@ class CommandProcessor(object):
 
         if self.__sensors__.current_light_sensor_reading is not None:
             status = str(int(self.__sensors__.current_light_sensor_reading.lux)) + \
-                     " LUX of light.\n"
+                " LUX of light.\n"
             status += "Hangar is "
             brightness = "Bright. Lights on?"
 
@@ -327,7 +325,7 @@ class CommandProcessor(object):
 
             uptime = time.time() - self.__system_start_time__
 
-            if uptime > 60:
+            if uptime > self.configuration.oldest_message:
                 status += "\nSystem has been up for " + \
                     utilities.get_time_text(uptime)
         except:
@@ -479,6 +477,7 @@ class CommandProcessor(object):
         # or the Pi
         if command_response.get_command() == text.PI_WARMER_OFF:
             try:
+                self.__write_to_lcd__("Shutting down...")
                 self.__queue_message_to_all_numbers__(
                     "Shutting down Raspberry Pi.")
                 self.__shutdown__()
@@ -489,6 +488,7 @@ class CommandProcessor(object):
                     "CR: Issue shutting down Raspberry Pi")
         elif command_response.get_command() == text.PI_WARMER_RESTART:
             try:
+                self.__write_to_lcd__("Restarting...")
                 self.__queue_message_to_all_numbers__("Attempting restart")
                 self.__restart__()
 
@@ -511,9 +511,6 @@ class CommandProcessor(object):
         """
         Process a SMS message/command.
         """
-
-        # TODO - Figure out what LOCAL time the message was sent
-        #        and ignore it if it is too old.
 
         message = message.lower()
         self.logger.log_info_message("Processing message:" + message)
@@ -720,24 +717,23 @@ class CommandProcessor(object):
         total_message_count = len(messages)
         messages_processed_count = 0
 
-        # TODO - Do I really want to process all of the pending
-        #        messages? Should we check to see if a mesage
-        #        changes the status of the system and then
-        #        break the processing so the queue can then
-        #        actually change the state?
+        # Check to see if a mesage
+        # changes the status of the system and then
+        # break the processing so the queue can then
+        # actually change the state.
         if total_message_count > 0:
             # TODO - Sort these messages so they are processed
             #        in the order they were sent.
             #        The order of reception by the GSM
             #        chip can be out of order.
-            # TODO - Ignore really old messages
             for message in messages:
                 messages_processed_count += 1
                 self.fona_manager.delete_message(message)
 
                 if message.minutes_waiting() > 60:
-                    old_message = "MSG too old, " + str(message.minutes_waiting()) + " minutes old."
-                    self.queue_message_to_all_numbers(old_message)
+                    old_message = "MSG too old, " + \
+                        str(message.minutes_waiting()) + " minutes old."
+                    self.__queue_message_to_all_numbers__(old_message)
                     continue
 
                 response, state_changed = self.__process_message__(
@@ -764,7 +760,7 @@ class CommandProcessor(object):
         cbc = self.fona_manager.battery_condition()
 
         self.logger.log_info_message("GSM Battery=" + str(cbc.get_percent_battery()) + "% Volts=" +
-                                     str(cbc.get_capacity_remaining()))
+                                     str(cbc.get_voltage()))
 
         if not cbc.is_battery_ok():
             low_battery_message = "WARNING: LOW BATTERY for Fona. Currently " + \
@@ -827,7 +823,8 @@ if __name__ == '__main__':
     doctest.testmod()
     CONFIG = PiWarmerConfiguration.PiWarmerConfiguration()
 
-    CONTROLLER = CommandProcessor(CONFIG, Logger(logging.getLogger("Controller")))
+    CONTROLLER = CommandProcessor(
+        CONFIG, Logger(logging.getLogger("Controller")))
 
     CONTROLLER.run_pi_warmer()
 

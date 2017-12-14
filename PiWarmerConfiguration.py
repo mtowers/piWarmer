@@ -63,6 +63,10 @@ class PiWarmerConfiguration(object):
         self.max_minutes_to_run = self.__config_parser__.getint(
             'SETTINGS', 'MAX_HEATER_TIME')
         self.log_filename = self.get_log_directory() + "hangar_buddy.log"
+        self.oldest_message = self.__config_parser__.getint(
+            'SETTINGS', 'OLDEST_MESSAGE_TO_PROCESS')
+        self.utc_offset = self.__config_parser__.getint(
+            'SETTINGS', 'UTC_OFFSET')
 
         try:
             self.test_mode = self.__config_parser__.getboolean(

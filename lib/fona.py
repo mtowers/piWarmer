@@ -32,11 +32,11 @@ class BatteryCondition(object):
         """
         return self.battery_percent
 
-    def get_capacity_remaining(self):
+    def get_voltage(self):
         """
-        Returns the milliamp hours remaining.
+        Returns the voltage of the battery.
         """
-        return self.milliamp_hours
+        return self.battery_voltage
 
     def is_battery_ok(self):
         """
@@ -69,11 +69,11 @@ class BatteryCondition(object):
         if not self.error_state:
             self.charge_state = float(results[0])
             self.battery_percent = float(results[1])
-            self.milliamp_hours = float(results[2]) / 10.0
+            self.battery_voltage = float(results[2]) / 10.0
         else:
             self.charge_state = 0
             self.battery_percent = 0
-            self.milliamp_hours = 0
+            self.battery_voltage = 0
 
 
 class SignalStrength(object):
@@ -176,10 +176,12 @@ class SmsMessage(object):
             time_tokens = message_time.split(':')
 
             self.message_id = message_id
-            self.sent_time = datetime.datetime.combine( \
-                                datetime.datetime(int("20" + date_tokens[0]), int(date_tokens[1]), int(date_tokens[2])), \
-                                datetime.time(int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2]))) \
-                             + datetime.timedelta(hours=TIMEZONE_OFFSET)
+            self.sent_time = datetime.datetime.combine(
+                datetime.datetime(
+                    int("20" + date_tokens[0]), int(date_tokens[1]), int(date_tokens[2])),
+                datetime.time(
+                    int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2]))) \
+                + datetime.timedelta(hours=TIMEZONE_OFFSET)
             self.sender_number = sender_number
             self.message_status = message_status
             self.message_text = message_text
@@ -466,7 +468,8 @@ class Fona(object):
 
         self.__wait_for_command_response__()
 
-        self.__logger__.log_info_message("Done with wait_for_command_repsonse()")
+        self.__logger__.log_info_message(
+            "Done with wait_for_command_repsonse()")
 
         return num_bytes_written
 
@@ -619,7 +622,7 @@ if __name__ == '__main__':
     BATTERY_CONDITION = FONA.get_current_battery_condition()
     FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
                       str(BATTERY_CONDITION.battery_percent)
-                      + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
+                      + "\nv:" + str(BATTERY_CONDITION.battery_voltage))
 
     SIGNAL_STRENGTH = FONA.get_signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
