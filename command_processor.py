@@ -589,7 +589,10 @@ class CommandProcessor(object):
         # or the Pi
         if command_response.get_command() == text.SHUTDOWN_COMMAND:
             try:
+                # Update the LCD, then set it to NULL
+                # so that it will not be updated again
                 self.__lcd__.write_text("Shutting down...")
+                self.__lcd__ = None
                 self.__queue_message_to_all_numbers__(
                     "Shutting down Raspberry Pi.")
                 self.__shutdown__()
@@ -600,7 +603,9 @@ class CommandProcessor(object):
                     "CR: Issue shutting down Raspberry Pi")
         elif command_response.get_command() == text.RESTART_COMMAND:
             try:
+                # Show that we are rebooting
                 self.__lcd__.write_text("Restarting...")
+                seld.__lcd__ = None
                 self.__queue_message_to_all_numbers__("Attempting restart")
                 self.__restart__()
 
@@ -763,6 +768,12 @@ class CommandProcessor(object):
         """
         Updates the LCD screen.
         """
+
+        # If we start shutting down or rebooting
+        # then __lcd__ is set to None to avoid
+        # any more updates
+        if self.__lcd__ is None:
+            return
 
         self.__lcd__.clear()
 
