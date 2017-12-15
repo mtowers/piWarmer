@@ -1,3 +1,5 @@
+#!/bin/sh
+
 git fetch
-git checkout develop
+# git checkout develop
 git pull
