@@ -7,6 +7,7 @@ from multiprocessing import Queue as MPQueue
 import datetime
 import local_debug
 import utilities
+from logger import Logger
 
 if not local_debug.is_debug():
     import RPi.GPIO as GPIO
@@ -154,7 +155,8 @@ class SmsMessage(object):
         and received.
         """
 
-        return (self.received_time - self.sent_time).days * 24 * 60
+        return (self.received_time
+                - (self.sent_time + datetime.timedelta(hours=TIMEZONE_OFFSET))).days * 24 * 60
 
     def __init__(self,
                  message_header,
@@ -185,8 +187,7 @@ class SmsMessage(object):
                 datetime.datetime(
                     int("20" + date_tokens[0]), int(date_tokens[1]), int(date_tokens[2])),
                 datetime.time(
-                    int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2]))) \
-                + datetime.timedelta(hours=TIMEZONE_OFFSET)
+                    int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2])))
             self.sender_number = sender_number
             self.message_status = message_status
             self.message_text = message_text
@@ -602,7 +603,6 @@ class Fona(object):
 if __name__ == '__main__':
     import serial
     import logging
-    from logger import Logger
 
     if not local_debug.is_debug():
         PHONE_NUMBER = "2066795094"  # input("Phone number>")

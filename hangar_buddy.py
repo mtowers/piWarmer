@@ -28,10 +28,10 @@ Main entry code for HangarBuddy
 # 3. (OPTIONAL) To have the device update its code automatically
 #    when connected to wifi, add the following line
 #    at the bottom of the file:
-#    ./update.sh
+#    /bin/sh /home/pi/piWarmer/update.sh
 # 4. Add the following line at the bottom of the file:
 #    NOTE: if this should be below the optional auot-update line
-#    python hangar_buddy.py
+#    python /home/pi/piWarmer/hangar_buddy.py &
 
 import logging
 import logging.handlers
