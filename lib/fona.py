@@ -113,11 +113,16 @@ class SignalStrength(object):
         """
         Parses the command result.
         """
+
+        self.recieved_signal_strength = 0
+        self.bit_error_rate = 0
+
         try:
-            tokens = command_result.split(':')
-            tokens = tokens[1].split(',')
-            self.recieved_signal_strength = int(tokens[0])
-            self.bit_error_rate = int(tokens[1])
+            if command_result is not None:
+                tokens = command_result.split(':')
+                tokens = tokens[1].split(',')
+                self.recieved_signal_strength = int(tokens[0])
+                self.bit_error_rate = int(tokens[1])
         except:
             self.recieved_signal_strength = 0
             self.bit_error_rate = 0

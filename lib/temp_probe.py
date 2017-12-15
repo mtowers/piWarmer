@@ -2,6 +2,7 @@
 
 import os
 import time
+import local_debug
 
 # ---------------------------------------------------------------
 # Note:
@@ -64,6 +65,9 @@ def read_sensors():
     []
     """
     temperature_probe_values = []
+
+    if local_debug.is_debug():
+        return temperature_probe_values
 
     try:
         for driver_file in os.listdir("/sys/bus/w1/devices/"):

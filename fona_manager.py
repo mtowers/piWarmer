@@ -173,7 +173,6 @@ class FonaManager(object):
 
         self.__lock__.release()
 
-
     def __process_send_messages__(self):
         """
         Handles sending any pending messages.
@@ -186,7 +185,8 @@ class FonaManager(object):
             while not self.__send_message_queue__.empty():
                 self.__logger__.log_info_message("__send_message_queue__")
                 message_to_send = self.__send_message_queue__.get()
-                self.__logger__.log_info_message("done: __send_message_queue__")
+                self.__logger__.log_info_message(
+                    "done: __send_message_queue__")
 
                 try:
                     self.__logger__.log_info_message("sending..")
@@ -195,13 +195,14 @@ class FonaManager(object):
                     self.__logger__.log_info_message("done sending")
                 except:
                     self.__logger__.log_warning_message(
-                        "Exception servicing outgoing message:" +str(sys.exc_info()[0]))
+                        "Exception servicing outgoing message:" + str(sys.exc_info()[0]))
 
                     message_to_send[3] -= 1
                     if message_to_send[3] > 0:
                         messages_to_retry.append(message_to_send)
         except:
-            self.__logger__.log_warning_message("Exception servicing outgoing queue:" + str(sys.exc_info()[0]))
+            self.__logger__.log_warning_message(
+                "Exception servicing outgoing queue:" + str(sys.exc_info()[0]))
 
         for message_to_retry in messages_to_retry:
             self.__logger__.log_warning_message(

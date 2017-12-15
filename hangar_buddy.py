@@ -1,4 +1,6 @@
-""" Main entry code for PiWarmer """
+"""
+Main entry code for HangarBuddy
+"""
 # !python
 #
 #
@@ -19,12 +21,12 @@
 
 import logging
 import logging.handlers
-import PiWarmerConfiguration
+import configuration
 from lib.logger import Logger
 import command_processor
 
 
-CONFIGURATION = PiWarmerConfiguration.PiWarmerConfiguration()
+CONFIGURATION = configuration.Configuration()
 
 LOG_LEVEL = logging.INFO
 
@@ -37,5 +39,6 @@ HANDLER.setFormatter(logging.Formatter(
 LOGGER.addHandler(HANDLER)
 
 if __name__ == '__main__':
-    COMMAND_PROCESSOR = command_processor.CommandProcessor(CONFIGURATION, Logger(LOGGER))
-    COMMAND_PROCESSOR.run_pi_warmer()
+    COMMAND_PROCESSOR = command_processor.CommandProcessor(
+        CONFIGURATION, Logger(LOGGER))
+    COMMAND_PROCESSOR.run_hangar_buddy()

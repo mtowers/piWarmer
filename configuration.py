@@ -13,14 +13,16 @@ def get_config_file_location():
     Get the location of the configuration file.
 
     >>> get_config_file_location()
-    './piWarmer.config'
+    './HangarBuddy.config'
     """
 
-    return './piWarmer.config'
+    return './HangarBuddy.config'
 
 
-class PiWarmerConfiguration(object):
-    """ Object to handle configuration of the piWarmer. """
+class Configuration(object):
+    """
+    Object to handle configuration of the HangarBuddy.
+    """
 
     def get_log_directory(self):
         """ returns the location of the logfile to use. """
@@ -81,7 +83,7 @@ class PiWarmerConfiguration(object):
 
 def test_configuration():
     """ Test that the configuration is valid. """
-    config = PiWarmerConfiguration()
+    config = Configuration()
 
     assert config.allowed_phone_numbers is not None
     assert config.allowed_phone_numbers.count > 0
