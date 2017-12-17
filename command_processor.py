@@ -911,12 +911,15 @@ class CommandProcessor(object):
                     self.__queue_message_to_all_numbers__(old_message)
                     continue
 
-                delta_startup = (message.message_sent_time_utc() - self.__system_start_time__).total_seconds()
+                delta_startup = (message.message_sent_time_utc() - \
+                                self.__system_start_time__).total_seconds()
                 if delta_startup < 0:
-                    self.__logger__.log_warning_message("MSG was sent " + utilities.get_time_text(int(math.fabs(delta_startup)))  + " before startup.")
-                    # old_message = "MSG was sent " + utilities.get_time_text(delta_startup)  + " before startup, ignoring"
-                    # self.__queue_message_to_all_numbers__(old_message)
-                   # continue
+                    old_message = "MSG was sent " \
+                                  + utilities.get_time_text(int(math.fabs(delta_startup))) \
+                                  + " before startup."
+                    self.__logger__.log_warning_message(old_message)
+                    self.__queue_message_to_all_numbers__(old_message)
+                    continue
 
                 response, state_changed = self.__process_message__(
                     message.message_text, message.sender_number)
