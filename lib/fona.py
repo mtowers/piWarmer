@@ -158,6 +158,14 @@ class SmsMessage(object):
         return (self.received_time
                 - (self.sent_time + datetime.timedelta(hours=TIMEZONE_OFFSET))).days * 24 * 60
 
+    def message_sent_time_utc(self):
+        """
+        When was the message sent in UTC time?
+        The SIM card returns time as Local...
+        """
+
+        return (self.sent_time + datetime.timedelta(hours=TIMEZONE_OFFSET))
+
     def __init__(self,
                  message_header,
                  message_text):

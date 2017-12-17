@@ -909,7 +909,7 @@ class CommandProcessor(object):
                         str(message.minutes_waiting()) + " minutes old."
                     self.__queue_message_to_all_numbers__(old_message)
                     continue
-                if message.sent_time < self.__system_start_time__:
+                if message.message_sent_time_utc() < self.__system_start_time__:
                     old_message = "MSG was sent before startup, ignoring"
                     self.__queue_message_to_all_numbers__(old_message)
                     continue
