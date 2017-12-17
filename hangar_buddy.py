@@ -1,4 +1,6 @@
-""" Main entry code for PiWarmer """
+"""
+Main entry code for HangarBuddy
+"""
 # !python
 #
 #
@@ -15,16 +17,30 @@
 # Written for Python 2.7
 # You will need to "pip install pyserial"
 #
-# Includes a GPIO mock for development\testing under Windows
+# Includes provisions for the basic logic to be run
+# for development\testing under Windows or Mac
+#
+# NOTE: To have this start automatically
+#
+# 1. sudo vim /etc/rc.local
+# 2. Add the following line:
+#    cd /home/pi/piWarmer
+# 3. (OPTIONAL) To have the device update its code automatically
+#    when connected to wifi, add the following line
+#    at the bottom of the file:
+#    /bin/sh /home/pi/piWarmer/update.sh
+# 4. Add the following line at the bottom of the file:
+#    NOTE: if this should be below the optional auto-update line
+#    python /home/pi/piWarmer/hangar_buddy.py &
 
 import logging
 import logging.handlers
-import PiWarmerConfiguration
+import configuration
 from lib.logger import Logger
 import command_processor
 
 
-CONFIGURATION = PiWarmerConfiguration.PiWarmerConfiguration()
+CONFIGURATION = configuration.Configuration()
 
 LOG_LEVEL = logging.INFO
 
@@ -37,5 +53,6 @@ HANDLER.setFormatter(logging.Formatter(
 LOGGER.addHandler(HANDLER)
 
 if __name__ == '__main__':
-    COMMAND_PROCESSOR = command_processor.CommandProcessor(CONFIGURATION, Logger(LOGGER))
-    COMMAND_PROCESSOR.run_pi_warmer()
+    COMMAND_PROCESSOR = command_processor.CommandProcessor(
+        CONFIGURATION, Logger(LOGGER))
+    COMMAND_PROCESSOR.run_hangar_buddy()

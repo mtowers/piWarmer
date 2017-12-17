@@ -48,7 +48,7 @@ class LcdDisplay(object):
             time.sleep(0.005)
             self.send_command(0x01)  # Clear Screen
 
-            if self.__smbus__ is not None:
+            if not local_debug.is_debug() and self.__smbus__ is not None:
                 self.__smbus__.write_byte(self.__lcd_addr__, 0x08)
         except:
             self.enable = False
@@ -67,7 +67,7 @@ class LcdDisplay(object):
         else:
             temp &= 0xF7
 
-        if self.__smbus__ is not None:
+        if not local_debug.is_debug() and self.__smbus__ is not None:
             self.__smbus__.write_byte(self.__lcd_addr__, temp)
 
 
@@ -135,6 +135,30 @@ class LcdDisplay(object):
         if self.__smbus__ is not None:
             self.__smbus__.write_byte(DEFAULT_1602_ADDRESS, 0x08)
             self.__smbus__.close()
+
+    def write_text(self, text_to_write):
+        """
+        Writes a string to the LCD.
+        """
+
+        if text_to_write is None:
+            return False
+
+        text_array = text_to_write.split('\n')
+
+        array_count = len(text_array)
+
+        if array_count <= 0:
+            return False
+
+        if array_count >= 1:
+            self.clear()
+            self.write(0, 0, text_array[0])
+
+        if array_count >= 2:
+            self.write(0, 1, text_array[1])
+
+        return True
 
     def write(self, pos_x, pos_y, text_to_write):
         """

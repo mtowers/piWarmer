@@ -139,7 +139,7 @@ def restart():
     """
 
     if not local_debug.is_debug():
-        subprocess.Popen(["sudo shutdown -r " + str(DEFAULT_POWER_CYCLE_DELAY)],
+        subprocess.Popen(["sudo shutdown -r now"],
                          shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT)
 
@@ -149,7 +149,7 @@ def shutdown():
     """
 
     if not local_debug.is_debug():
-        subprocess.Popen(["sudo shutdown -h " + str(DEFAULT_POWER_CYCLE_DELAY)],
+        subprocess.Popen(["sudo shutdown -h now"],
                          shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT)
 

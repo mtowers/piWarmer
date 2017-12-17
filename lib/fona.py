@@ -7,6 +7,7 @@ from multiprocessing import Queue as MPQueue
 import datetime
 import local_debug
 import utilities
+from logger import Logger
 
 if not local_debug.is_debug():
     import RPi.GPIO as GPIO
@@ -32,11 +33,11 @@ class BatteryCondition(object):
         """
         return self.battery_percent
 
-    def get_capacity_remaining(self):
+    def get_voltage(self):
         """
-        Returns the milliamp hours remaining.
+        Returns the voltage of the battery.
         """
-        return self.milliamp_hours
+        return self.battery_voltage
 
     def is_battery_ok(self):
         """
@@ -69,11 +70,11 @@ class BatteryCondition(object):
         if not self.error_state:
             self.charge_state = float(results[0])
             self.battery_percent = float(results[1])
-            self.milliamp_hours = float(results[2]) / 10.0
+            self.battery_voltage = float(results[2]) / 10.0
         else:
             self.charge_state = 0
             self.battery_percent = 0
-            self.milliamp_hours = 0
+            self.battery_voltage = 0
 
 
 class SignalStrength(object):
@@ -113,11 +114,16 @@ class SignalStrength(object):
         """
         Parses the command result.
         """
+
+        self.recieved_signal_strength = 0
+        self.bit_error_rate = 0
+
         try:
-            tokens = command_result.split(':')
-            tokens = tokens[1].split(',')
-            self.recieved_signal_strength = int(tokens[0])
-            self.bit_error_rate = int(tokens[1])
+            if command_result is not None:
+                tokens = command_result.split(':')
+                tokens = tokens[1].split(',')
+                self.recieved_signal_strength = int(tokens[0])
+                self.bit_error_rate = int(tokens[1])
         except:
             self.recieved_signal_strength = 0
             self.bit_error_rate = 0
@@ -149,7 +155,8 @@ class SmsMessage(object):
         and received.
         """
 
-        return (self.received_time - self.sent_time).days * 24 * 60
+        return (self.received_time
+                - (self.sent_time + datetime.timedelta(hours=TIMEZONE_OFFSET))).days * 24 * 60
 
     def __init__(self,
                  message_header,
@@ -176,10 +183,11 @@ class SmsMessage(object):
             time_tokens = message_time.split(':')
 
             self.message_id = message_id
-            self.sent_time = datetime.datetime.combine( \
-                                datetime.datetime(int("20" + date_tokens[0]), int(date_tokens[1]), int(date_tokens[2])), \
-                                datetime.time(int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2]))) \
-                             + datetime.timedelta(hours=TIMEZONE_OFFSET)
+            self.sent_time = datetime.datetime.combine(
+                datetime.datetime(
+                    int("20" + date_tokens[0]), int(date_tokens[1]), int(date_tokens[2])),
+                datetime.time(
+                    int(time_tokens[0]), int(time_tokens[1]), int(time_tokens[2])))
             self.sender_number = sender_number
             self.message_status = message_status
             self.message_text = message_text
@@ -466,7 +474,8 @@ class Fona(object):
 
         self.__wait_for_command_response__()
 
-        self.__logger__.log_info_message("Done with wait_for_command_repsonse()")
+        self.__logger__.log_info_message(
+            "Done with wait_for_command_repsonse()")
 
         return num_bytes_written
 
@@ -594,7 +603,6 @@ class Fona(object):
 if __name__ == '__main__':
     import serial
     import logging
-    from logger import Logger
 
     if not local_debug.is_debug():
         PHONE_NUMBER = "2066795094"  # input("Phone number>")
@@ -619,7 +627,7 @@ if __name__ == '__main__':
     BATTERY_CONDITION = FONA.get_current_battery_condition()
     FONA.send_message(PHONE_NUMBER, "Time:" + str(time.time()) + "\nPCT:" +
                       str(BATTERY_CONDITION.battery_percent)
-                      + "\nmAH:" + str(BATTERY_CONDITION.milliamp_hours))
+                      + "\nv:" + str(BATTERY_CONDITION.battery_voltage))
 
     SIGNAL_STRENGTH = FONA.get_signal_strength()
     print "Signal:" + SIGNAL_STRENGTH.classify_strength()
