@@ -912,7 +912,6 @@ class CommandProcessor(object):
                     continue
 
                 delta_startup = (message.message_sent_time_utc() - self.__system_start_time__).total_seconds()
-                self.__logger__.log_warning_message
                 if delta_startup < 0:
                     self.__logger__.log_warning_message("MSG was sent " + utilities.get_time_text(int(math.fabs(delta_startup)))  + " before startup.")
                     # old_message = "MSG was sent " + utilities.get_time_text(delta_startup)  + " before startup, ignoring"
