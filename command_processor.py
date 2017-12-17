@@ -25,17 +25,17 @@ from lib.sf_1602_lcd import LcdDisplay
 # the CommandProcessor can know what to
 # look for and CommandResponse can
 # reject invalid commands.
-VALID_COMMANDS = {text.HEATER_OFF_COMMAND,
-                  text.HEATER_ON_COMMAND,
-                  text.SHUTDOWN_COMMAND,
-                  text.RESTART_COMMAND,
-                  text.QUIT_COMMAND,
-                  text.FULL_STATUS_COMMAND,
+VALID_COMMANDS = {text.FULL_STATUS_COMMAND,
                   text.HELP_COMMAND,
                   text.LIGHTS_COMMAND,
                   text.CELL_STATUS_COMMAND,
                   text.TEMPERATURE_COMMAND,
-                  text.UPTIME_COMMAND}
+                  text.UPTIME_COMMAND,
+                  text.HEATER_OFF_COMMAND,
+                  text.HEATER_ON_COMMAND,
+                  text.SHUTDOWN_COMMAND,
+                  text.RESTART_COMMAND,
+                  text.QUIT_COMMAND}
 
 
 class CommandResponse(object):
@@ -274,7 +274,7 @@ class CommandProcessor(object):
         Gets how long the system has been up.
         """
 
-        uptime = (time.time() - self.__system_start_time__).total_seconds()
+        uptime = (datetime.datetime.now() - self.__system_start_time__).total_seconds()
         return utilities.get_time_text(uptime)
 
     def __get_light_status__(self):
@@ -793,8 +793,7 @@ class CommandProcessor(object):
                 self.__lcd__.write_text(self.__get_temp_probe_status__())
             else:
                 self.__lcd_status_id__ = -1
-                self.__lcd__.write(0, 0, "UPTIME:")
-                self.__lcd__.write(0, 1, self.__get_uptime_status__())
+                self.__lcd__.write_text("UPTIME:\n" + self.__get_uptime_status__())
         except:
             self.__lcd__.write(0, 0, "ERROR: LCD_ID=" +
                                str(self.__lcd_status_id__))

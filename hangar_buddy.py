@@ -30,7 +30,7 @@ Main entry code for HangarBuddy
 #    at the bottom of the file:
 #    /bin/sh /home/pi/piWarmer/update.sh
 # 4. Add the following line at the bottom of the file:
-#    NOTE: if this should be below the optional auot-update line
+#    NOTE: if this should be below the optional auto-update line
 #    python /home/pi/piWarmer/hangar_buddy.py &
 
 import logging
