@@ -13,14 +13,16 @@ def get_config_file_location():
     Get the location of the configuration file.
 
     >>> get_config_file_location()
-    './piWarmer.config'
+    './HangarBuddy.config'
     """
 
-    return './piWarmer.config'
+    return './HangarBuddy.config'
 
 
-class PiWarmerConfiguration(object):
-    """ Object to handle configuration of the piWarmer. """
+class Configuration(object):
+    """
+    Object to handle configuration of the HangarBuddy.
+    """
 
     def get_log_directory(self):
         """ returns the location of the logfile to use. """
@@ -63,6 +65,10 @@ class PiWarmerConfiguration(object):
         self.max_minutes_to_run = self.__config_parser__.getint(
             'SETTINGS', 'MAX_HEATER_TIME')
         self.log_filename = self.get_log_directory() + "hangar_buddy.log"
+        self.oldest_message = self.__config_parser__.getint(
+            'SETTINGS', 'OLDEST_MESSAGE_TO_PROCESS')
+        self.utc_offset = self.__config_parser__.getint(
+            'SETTINGS', 'UTC_OFFSET')
 
         try:
             self.test_mode = self.__config_parser__.getboolean(
@@ -77,7 +83,7 @@ class PiWarmerConfiguration(object):
 
 def test_configuration():
     """ Test that the configuration is valid. """
-    config = PiWarmerConfiguration()
+    config = Configuration()
 
     assert config.allowed_phone_numbers is not None
     assert config.allowed_phone_numbers.count > 0

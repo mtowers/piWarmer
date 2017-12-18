@@ -1,25 +1,39 @@
-# piWarmer
+# HangarBuddy
 
 This is a Python scipt that controls an AC/DC relay attached to a Raspberry Pi
 with a space heater plugged in. There is an adafruit GSM Board that receives
 text messages using a Ting SIM card connected to the Raspberry Pi. When the Pi
 receives a text messgae it will turn the AC/DC relay on or off accordingly, thus
 powering the heater on or off. The following are a list of commands that can be
-sent to the Pi that will control the heater:
+sent to the Pi that will control the heater.
+
+In addition to the original heater control that this code performed,
+it has been extended and modified in a number of ways.
+
+1. Allow extensibility to add more features.
+1. Gas sensor is now sent through an analog converter so the exact gas level can be known.
+1. The gas sensor has a trigger level, and a lower "all clear" level so the alert will keep firing until the issue is addressed, but not spam your phone.
+1. The gas sensor will alert you to gas **__anytime__** it is detected, not just when the heater is being operated.
+1. A light sensor has been added so you can tell if you left the lights on.
+1. A temperature sensor has been added so you know if you need to turn on the heater.
+1. A LCD was added so you can position the unit and know what the signal quality is.
+1. Enhanced the "STATUS" command to give you a full rundown of all the sensor data.
 
 ## Acknowledgements
 
-This version was based on
+This version was based on the piWarmer by Maria DeGrazia.
 [https://github.com/mdegrazia/piWarmer](https://github.com/mdegrazia/piWarmer)
 
-I want to extend my many thanks to Maria for starting such an amazing project
+I want to extend my many thanks to Maria for starting such an amazing project!
 
 The light sensor code is from "arenadorn" and
 [tsl2591](https://github.com/maxlklaxl/python-tsl2591/blob/master/tsl2591/read_tsl.py)
 
+The temperature, and gas sensor code is heavily based on the SunFounder sample code.
+
 ## Disclaimer
 
-\***\*piWarmer is to be used at your own risk\**** This version of the code has
+**HangarBuddy is to be used at your own risk** This version of the code has
 been modified to increase the reliability and safety of the device, but it is an
 experimental device.
 
@@ -32,12 +46,12 @@ The commands are not case sensitive.
 | ON          | Turn the Relay/Heater on                      |
 | OFF         | Turn the Relay/Heater off                     |
 | STATUS      | Return status of the Relay/Heater (on or off) |
-| HELP        | Return the list of piWarmer commands.         |
+| HELP        | Return the list of commands.         |
 | SHUTDOWN    | Shutdown the Pi                               |
 
 ## Setup
 
-You will need to modify the piWarmer.config file to match your installation.
+You will need to modify the HangarBuddy.config file to match your installation.
 This file includes a list of phone numbers that are authorized to issue
 commands. The file also includes a phone number that any alerts will be sent to.
 
@@ -188,7 +202,7 @@ The Raspberry Pi zero uses a mini HDMI port for display. If you do not have an
 adapter, you will need one. This is not required in the installation once the
 device is "deployed". The USB hub makes coding and debugging on the PI possible
 as it allows a keyboard, mouse, and the Fona modem to be connected
-simultanously. When the piWarmer is "deployed" only the Fona will be plugged
+simultanously. When the HangarBuddy is "deployed" only the Fona will be plugged
 into the USB port.
 
 * [ ] [MiniHDMI to HDMI adapter](https://www.amazon.com/Adapter-VCE-Converter-Camcorder-Devices/dp/B01HYURR04/ref=sr_1_8?s=electronics&ie=UTF8&qid=1512070954&sr=1-8&keywords=mini+hdmi+adapter)
