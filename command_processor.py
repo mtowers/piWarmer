@@ -597,6 +597,7 @@ class CommandProcessor(object):
                 self.__lcd__ = None
                 self.__queue_message_to_all_numbers__(
                     "Shutting down Raspberry Pi.")
+                self.__clear_existing_messages__()
                 self.__shutdown__()
 
                 return True
@@ -605,11 +606,12 @@ class CommandProcessor(object):
                     "CR: Issue shutting down Raspberry Pi")
         elif command_response.get_command() == text.RESTART_COMMAND:
             try:
-                self.__restart__()
                 # Show that we are rebooting
                 self.__lcd__.write_text("Restarting...")
                 self.__lcd__ = None
+                self.__clear_existing_messages__()
                 self.__queue_message_to_all_numbers__("Attempting restart")
+                self.__restart__()
 
                 return True
             except:
