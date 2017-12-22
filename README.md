@@ -119,10 +119,10 @@ For a complete set of installation instructions, visit
 can use the duplicate SDA/SLC connectors on the set screw
 side __AND__ the connector pin side.
 
-* VCC to GPIO 3.3V
-* GND to GPIO Ground
-* SDA to GPIO SDA
-* SLC to GPIO SLC
+* VCC (Red) to GPIO 3.3V
+* GND (Black) to GPIO Ground
+* SDA (White) to GPIO SDA
+* SLC (Gray) to GPIO SLC
 
 ### Status Display
 

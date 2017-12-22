@@ -80,11 +80,19 @@ class LightSensor(object):
         self.sendor_address = sensor_address
         self.integration_time = integration
         self.gain = gain
-        self.set_timing(self.integration_time)
-        self.set_gain(self.gain)
-        self.disable()  # to be sure
+
+        try:
+            self.set_timing(self.integration_time)
+            self.set_gain(self.gain)
+            self.disable()  # to be sure
+            self.enabled = True
+        except:
+            self.enabled = False
 
     def set_timing(self, integration):
+        if not self.enabled:
+            return
+
         self.enable()
         self.integration_time = integration
         if not local_debug.is_debug():
@@ -101,12 +109,18 @@ class LightSensor(object):
     def set_gain(self, gain):
         self.enable()
         self.gain = gain
-        if not local_debug.is_debug():
-            self.bus.write_byte_data(
-                self.sendor_address,
-                COMMAND_BIT | REGISTER_CONTROL,
-                self.integration_time | self.gain
-            )
+
+        if not self.enabled:
+            return
+
+        if local_debug.is_debug():
+            return
+
+        self.bus.write_byte_data(
+            self.sendor_address,
+            COMMAND_BIT | REGISTER_CONTROL,
+            self.integration_time | self.gain
+        )
         self.disable()
 
     def get_gain(self):
@@ -155,37 +169,43 @@ class LightSensor(object):
         return max([lux1, lux2])
 
     def enable(self):
-        if not local_debug.is_debug():
-            self.bus.write_byte_data(
-                self.sendor_address,
-                COMMAND_BIT | REGISTER_ENABLE,
-                ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
-            )  # Enable
+        if local_debug.is_debug() or not self.enabled:
+            return
+
+        self.bus.write_byte_data(
+            self.sendor_address,
+            COMMAND_BIT | REGISTER_ENABLE,
+            ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
+        )  # Enable
 
     def disable(self):
-        if not local_debug.is_debug():
-            self.bus.write_byte_data(
-                self.sendor_address,
-                COMMAND_BIT | REGISTER_ENABLE,
-                ENABLE_POWEROFF
-            )
+        if not self.enabled or local_debug.is_debug():
+            return
+
+        self.bus.write_byte_data(
+            self.sendor_address,
+            COMMAND_BIT | REGISTER_ENABLE,
+            ENABLE_POWEROFF
+        )
 
     def get_full_luminosity(self):
         self.enable()
         # not sure if we need it "// Wait x ms for ADC to complete"
         time.sleep(0.120 * self.integration_time + 1)
 
-        if not local_debug.is_debug():
-            full = self.bus.read_word_data(
-                self.sendor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
-            )
-            ir = self.bus.read_word_data(
-                self.sendor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
-            )
-            self.disable()
-            return full, ir
+        if not self.enabled or local_debug.is_debug():
+            return 0, 0
 
-        return 0, 0
+        full = self.bus.read_word_data(
+            self.sendor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
+        )
+        ir = self.bus.read_word_data(
+            self.sendor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
+        )
+        self.disable()
+        return full, ir
+
+        
 
     def get_luminosity(self, channel):
         full, ir = self.get_full_luminosity()

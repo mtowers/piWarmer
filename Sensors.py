@@ -39,8 +39,9 @@ class Sensors(object):
         self.current_light_sensor_reading = None
         self.current_temperature_sensor_reading = None
 
-        if configuration.is_light_sensor_enabled:
-            self.__light_sensor__ = LightSensor()
+        self.__light_sensor__ = LightSensor()
+
+        if self.__light_sensor__.enabled:
             RecurringTask("__update_light_sensor__", DEFAULT_LIGHT_SENSOR_UPDATE_INTERVAL,
                           self.__update_light_sensor__, self.__logger__)
 
