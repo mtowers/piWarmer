@@ -73,23 +73,27 @@ class GasSensor(object):
             self.current_value += self.simulator_direction
             return int(self.current_value)
 
-        self.ic2_bus.write_byte(DEFAULT_IC2_ADDRESS,
-                                read_offset)
+        try:
+            self.ic2_bus.write_byte(DEFAULT_IC2_ADDRESS,
+                                    read_offset)
 
-        # Needs a "dummy read" for the conversion to happen
-        # The write back needs to compress the range of values
-        # from 0-255 to 125 to 255.
-        # This makes the LED light up
-        self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
+            # Needs a "dummy read" for the conversion to happen
+            # The write back needs to compress the range of values
+            # from 0-255 to 125 to 255.
+            # This makes the LED light up
+            self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
 
-        raw_value = self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
-        converted_value = raw_value * (255.0 - 125.0) / 255.0 + 125.0
-        print "RAW=" + str(raw_value) + ", CONV=" + str(converted_value)
+            raw_value = self.ic2_bus.read_byte(DEFAULT_IC2_ADDRESS)
+            converted_value = raw_value * (255.0 - 125.0) / 255.0 + 125.0
+            print "RAW=" + str(raw_value) + ", CONV=" + str(converted_value)
 
-        self.ic2_bus.write_byte_data(
-            DEFAULT_IC2_ADDRESS, 0x40, int(converted_value))
+            self.ic2_bus.write_byte_data(
+                DEFAULT_IC2_ADDRESS, 0x40, int(converted_value))
 
-        return raw_value
+            return raw_value
+        except:
+            self.enabled = False
+            return None
 
     def update(self, read_offset=DEFAULT_CHANNEL_READ_OFFSET):
         """
@@ -99,7 +103,7 @@ class GasSensor(object):
         self.current_value = self.__read__(read_offset)
 
         if self.current_value is None or not self.enabled:
-            return None
+            return GasSensorResult(False, DEFAULT_ALL_CLEAR_THRESHOLD) 
 
         # For the warning to be removed, it must drop below an
         # all clear level that is lower than the trigger level.
@@ -116,7 +120,7 @@ class GasSensor(object):
 if __name__ == '__main__':
     SENSOR = GasSensor()
 
-    while True:
+    while SENSOR.enabled:
         IS_GAS_DETECTED = SENSOR.update()
         print "LVL:" + str(IS_GAS_DETECTED.current_value) + ", " \
             + str(IS_GAS_DETECTED.is_gas_detected)

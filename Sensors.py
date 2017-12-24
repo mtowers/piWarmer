@@ -47,8 +47,11 @@ class Sensors(object):
 
         if configuration.is_mq2_enabled:
             self.__gas_sensor__ = GasSensor()
-            RecurringTask("__update_gas_sensor__", DEFAULT_GAS_SENSOR_UPDATE_INTERVAL,
-                          self.__update_gas_sensor__, self.__logger__)
+
+            if self.__gas_sensor__ is not None and \
+                    self.__gas_sensor__.enabled:
+                RecurringTask("__update_gas_sensor__", DEFAULT_GAS_SENSOR_UPDATE_INTERVAL,
+                              self.__update_gas_sensor__, self.__logger__)
 
         if configuration.is_temp_probe_enabled:
             RecurringTask("__update_temperature_sensor__",
@@ -70,6 +73,10 @@ class Sensors(object):
         """
         Read the gas sensor and keep it up to date.
         """
+
+        if not self.__gas_sensor__.enabled:
+            self.current_gas_sensor_reading = None
+            return
 
         self.current_gas_sensor_reading = self.__gas_sensor__.update()
 
