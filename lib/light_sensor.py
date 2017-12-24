@@ -233,12 +233,19 @@ class LightSensorResult(object):
         Reads the sensor and stores the results.
         """
 
-        full, ir = tsl_sensor.get_full_luminosity()
-        lux = tsl_sensor.calculate_lux(full, ir)
+        try:
+            full, ir = tsl_sensor.get_full_luminosity()
+            lux = tsl_sensor.calculate_lux(full, ir)
 
-        self.full_spectrum = full
-        self.infrared = ir
-        self.lux = lux
+            self.full_spectrum = full
+            self.infrared = ir
+            self.lux = lux
+            self.enabled = True
+        except:
+            self.full_spectrum = 0
+            self.infrared = 0
+            self.lux = 0
+            self.enabled = False
 
 
 if __name__ == '__main__':

@@ -255,7 +255,7 @@ class CommandProcessor(object):
             str(self.__sensors__.current_gas_sensor_reading.current_value)
 
         if self.__sensors__.current_gas_sensor_reading.is_gas_detected:
-            status_text += "\nDANGER! GAS DETECTED!"
+            status_text += "\nGAS DETECTED!"
 
         return status_text
 
@@ -786,20 +786,31 @@ class CommandProcessor(object):
         try:
             if self.__lcd_status_id__ == 0:
                 self.__lcd__.write_text(self.__get_fona_status__())
-            elif self.__lcd_status_id__ == 1:
+            if self.__lcd_status_id__ == 1:
                 self.__lcd__.write_text(self.__get_heater_status__())
-            elif self.__lcd_status_id__ == 2:
-                self.__lcd__.write_text(self.__get_gas_sensor_status__())
-            elif self.__lcd_status_id__ == 3:
-                self.__lcd__.write_text(self.__get_light_status__())
-            elif self.__lcd_status_id__ == 4:
-                self.__lcd__.write_text(self.__get_temp_probe_status__())
-            else:
+            if self.__lcd_status_id__ == 2:
+                if self.__sensors__.current_gas_sensor_reading is not None:
+                    self.__lcd__.write_text(self.__get_gas_sensor_status__())
+                else:
+                    self.__lcd_status_id__ += 1
+            if self.__lcd_status_id__ == 3:
+                if  self.__sensors__.current_light_sensor_reading is not None \
+                        and  self.__sensors__.current_light_sensor_reading.enabled:
+                    self.__lcd__.write_text(self.__get_light_status__())
+                else:
+                    self.__lcd_status_id__ += 1
+            if self.__lcd_status_id__ == 4:
+                if self.__sensors__.current_temperature_sensor_reading is not None:
+                    self.__lcd__.write_text(self.__get_temp_probe_status__())
+                else:
+                    self.__lcd_status_id__ += 1
+            if self.__lcd_status_id__ >= 5:
                 self.__lcd_status_id__ = -1
                 self.__lcd__.write_text("UPTIME:\n" + self.__get_uptime_status__())
         except:
             self.__lcd__.write(0, 0, "ERROR: LCD_ID=" +
                                str(self.__lcd_status_id__))
+            self.__lcd_status_id__ = -1
 
         self.__lcd_status_id__ = self.__lcd_status_id__ + 1
 

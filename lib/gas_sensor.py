@@ -33,10 +33,16 @@ class GasSensor(object):
                  sensor_trigger_threshold=DEFAULT_TRIGGER_THRESHOLD,
                  sensor_all_clear_threshold=DEFAULT_ALL_CLEAR_THRESHOLD):
         print "Starting init"
+
+        self.enabled = True
+
         if local_debug.is_debug():
             self.ic2_bus = None
         else:
-            self.ic2_bus = smbus.SMBus(DEFAULT_IC2_BUS)
+            try:
+                self.ic2_bus = smbus.SMBus(DEFAULT_IC2_BUS)
+            except:
+                self.enabled = False
 
         self.is_gas_detected = False
         self.sensor_trigger_threshold = sensor_trigger_threshold
@@ -48,6 +54,9 @@ class GasSensor(object):
         """
         Read from the ic2 device.
         """
+
+        if not self.enabled:
+            return None
 
         # Provide a mock/simulator for debugging on Mac/Windows
         if local_debug.is_debug():
@@ -89,6 +98,9 @@ class GasSensor(object):
 
         self.current_value = self.__read__(read_offset)
 
+        if self.current_value is None or not self.enabled:
+            return None
+
         # For the warning to be removed, it must drop below an
         # all clear level that is lower than the trigger level.
         # This protects against the alarm triggering over and over
@@ -106,5 +118,6 @@ if __name__ == '__main__':
 
     while True:
         IS_GAS_DETECTED = SENSOR.update()
-        print "LVL:" + str(IS_GAS_DETECTED.current_value) + ", " + str(IS_GAS_DETECTED.is_gas_detected)
+        print "LVL:" + str(IS_GAS_DETECTED.current_value) + ", " \
+            + str(IS_GAS_DETECTED.is_gas_detected)
         time.sleep(0.2)
