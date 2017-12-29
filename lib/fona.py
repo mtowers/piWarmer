@@ -613,7 +613,7 @@ if __name__ == '__main__':
     import logging
 
     if not local_debug.is_debug():
-        PHONE_NUMBER = "2066795094"  # input("Phone number>")
+        PHONE_NUMBER = "2067654321"  # input("Phone number>")
     else:
         PHONE_NUMBER = "2061234567"
 
