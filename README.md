@@ -113,6 +113,17 @@ For a complete set of installation instructions, visit
 * Red to +5VO
 * Black to GPIO GND
 
+## Light Sensor
+
+**NOTE**: If you have the IO hat installed on the Pi, then you
+can use the duplicate SDA/SLC connectors on the set screw
+side __AND__ the connector pin side.
+
+* VCC (Red) to GPIO 3.3V
+* GND (Black) to GPIO Ground
+* SDA (White) to GPIO SDA
+* SLC (Gray) to GPIO SLC
+
 ### Status Display
 
 #### Additional Work

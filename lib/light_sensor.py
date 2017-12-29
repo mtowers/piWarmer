@@ -75,24 +75,40 @@ class LightSensor(object):
             gain=GAIN_LOW
     ):
         if not local_debug.is_debug():
+            print "Initializing i2c bus"
             self.bus = smbus.SMBus(i2c_bus)
 
-        self.sendor_address = sensor_address
+        self.sensor_address = sensor_address
         self.integration_time = integration
         self.gain = gain
-        self.set_timing(self.integration_time)
-        self.set_gain(self.gain)
-        self.disable()  # to be sure
+        self.enabled = True
+
+        try:
+            print "Setting timing"
+            self.set_timing(self.integration_time)
+            self.set_gain(self.gain)
+            self.disable()  # to be sure
+            print "Enabled"
+        except:
+            print "Failed to initialize"
+            self.enabled = False
 
     def set_timing(self, integration):
+        if not self.enabled:
+            print "set_timing:Not enbabled"
+            return
+
+        print "set_timing:Enabling"
         self.enable()
         self.integration_time = integration
         if not local_debug.is_debug():
+            print "set_timing:Writing data byte"
             self.bus.write_byte_data(
-                self.sendor_address,
+                self.sensor_address,
                 COMMAND_BIT | REGISTER_CONTROL,
                 self.integration_time | self.gain
             )
+        print "Disabling"
         self.disable()
 
     def get_timing(self):
@@ -101,12 +117,18 @@ class LightSensor(object):
     def set_gain(self, gain):
         self.enable()
         self.gain = gain
-        if not local_debug.is_debug():
-            self.bus.write_byte_data(
-                self.sendor_address,
-                COMMAND_BIT | REGISTER_CONTROL,
-                self.integration_time | self.gain
-            )
+
+        if not self.enabled:
+            return
+
+        if local_debug.is_debug():
+            return
+
+        self.bus.write_byte_data(
+            self.sensor_address,
+            COMMAND_BIT | REGISTER_CONTROL,
+            self.integration_time | self.gain
+        )
         self.disable()
 
     def get_gain(self):
@@ -155,37 +177,50 @@ class LightSensor(object):
         return max([lux1, lux2])
 
     def enable(self):
-        if not local_debug.is_debug():
-            self.bus.write_byte_data(
-                self.sendor_address,
-                COMMAND_BIT | REGISTER_ENABLE,
-                ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
-            )  # Enable
+        print "Entering enable"
+        if local_debug.is_debug():
+            print "Local debug"
+            return
+        if not self.enabled:
+            print "Not enabled"
+            return
+
+        print "enable:writing to data bus."
+        self.bus.write_byte_data(
+            self.sensor_address,
+            COMMAND_BIT | REGISTER_ENABLE,
+            ENABLE_POWERON | ENABLE_AEN | ENABLE_AIEN
+        )  # Enable
+        print "Done enabling"
 
     def disable(self):
-        if not local_debug.is_debug():
-            self.bus.write_byte_data(
-                self.sendor_address,
-                COMMAND_BIT | REGISTER_ENABLE,
-                ENABLE_POWEROFF
-            )
+        if not self.enabled or local_debug.is_debug():
+            return
+
+        self.bus.write_byte_data(
+            self.sensor_address,
+            COMMAND_BIT | REGISTER_ENABLE,
+            ENABLE_POWEROFF
+        )
 
     def get_full_luminosity(self):
         self.enable()
         # not sure if we need it "// Wait x ms for ADC to complete"
         time.sleep(0.120 * self.integration_time + 1)
 
-        if not local_debug.is_debug():
-            full = self.bus.read_word_data(
-                self.sendor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
-            )
-            ir = self.bus.read_word_data(
-                self.sendor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
-            )
-            self.disable()
-            return full, ir
+        if not self.enabled or local_debug.is_debug():
+            return 0, 0
 
-        return 0, 0
+        full = self.bus.read_word_data(
+            self.sensor_address, COMMAND_BIT | REGISTER_CHAN0_LOW
+        )
+        ir = self.bus.read_word_data(
+            self.sensor_address, COMMAND_BIT | REGISTER_CHAN1_LOW
+        )
+        self.disable()
+        return full, ir
+
+        
 
     def get_luminosity(self, channel):
         full, ir = self.get_full_luminosity()
@@ -213,12 +248,19 @@ class LightSensorResult(object):
         Reads the sensor and stores the results.
         """
 
-        full, ir = tsl_sensor.get_full_luminosity()
-        lux = tsl_sensor.calculate_lux(full, ir)
+        try:
+            full, ir = tsl_sensor.get_full_luminosity()
+            lux = tsl_sensor.calculate_lux(full, ir)
 
-        self.full_spectrum = full
-        self.infrared = ir
-        self.lux = lux
+            self.full_spectrum = full
+            self.infrared = ir
+            self.lux = lux
+            self.enabled = True
+        except:
+            self.full_spectrum = 0
+            self.infrared = 0
+            self.lux = 0
+            self.enabled = False
 
 
 if __name__ == '__main__':
@@ -228,6 +270,5 @@ if __name__ == '__main__':
 #    tsl.set_gain(GAIN_MED)
 #    tsl.set_timing(INTEGRATIONTIME_100MS)
 
-    while True:
-        RESULT = LightSensorResult(TSL)
-        print "Lux=" + str(RESULT.lux)
+    RESULT = LightSensorResult(TSL)
+    print "Lux=" + str(RESULT.lux)

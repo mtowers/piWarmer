@@ -139,7 +139,7 @@ def restart():
     """
 
     if not local_debug.is_debug():
-        subprocess.Popen(["sudo shutdown -r now"],
+        subprocess.Popen(["sudo shutdown -r 30"],
                          shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT)
 
@@ -149,7 +149,7 @@ def shutdown():
     """
 
     if not local_debug.is_debug():
-        subprocess.Popen(["sudo shutdown -h now"],
+        subprocess.Popen(["sudo shutdown -h 30"],
                          shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT)
 

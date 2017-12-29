@@ -39,15 +39,19 @@ class Sensors(object):
         self.current_light_sensor_reading = None
         self.current_temperature_sensor_reading = None
 
-        if configuration.is_light_sensor_enabled:
-            self.__light_sensor__ = LightSensor()
+        self.__light_sensor__ = LightSensor()
+
+        if self.__light_sensor__.enabled:
             RecurringTask("__update_light_sensor__", DEFAULT_LIGHT_SENSOR_UPDATE_INTERVAL,
                           self.__update_light_sensor__, self.__logger__)
 
         if configuration.is_mq2_enabled:
             self.__gas_sensor__ = GasSensor()
-            RecurringTask("__update_gas_sensor__", DEFAULT_GAS_SENSOR_UPDATE_INTERVAL,
-                          self.__update_gas_sensor__, self.__logger__)
+
+            if self.__gas_sensor__ is not None and \
+                    self.__gas_sensor__.enabled:
+                RecurringTask("__update_gas_sensor__", DEFAULT_GAS_SENSOR_UPDATE_INTERVAL,
+                              self.__update_gas_sensor__, self.__logger__)
 
         if configuration.is_temp_probe_enabled:
             RecurringTask("__update_temperature_sensor__",
@@ -70,9 +74,15 @@ class Sensors(object):
         Read the gas sensor and keep it up to date.
         """
 
+        if not self.__gas_sensor__.enabled:
+            self.current_gas_sensor_reading = None
+            return
+
         self.current_gas_sensor_reading = self.__gas_sensor__.update()
-        self.__logger__.info(", GAS, Level=" + str(self.current_gas_sensor_reading.current_value) \
-                             + ", Detected=" + str(self.current_gas_sensor_reading.is_gas_detected))
+
+        if self.current_gas_sensor_reading is not None:
+            self.__logger__.info(", GAS, Level=" + str(self.current_gas_sensor_reading.current_value) \
+                                 + ", Detected=" + str(self.current_gas_sensor_reading.is_gas_detected))
 
     def __update_temperature_sensor__(self):
         """
@@ -86,3 +96,5 @@ class Sensors(object):
                 self.current_temperature_sensor_reading = int(
                     sensor_readings[0])
                 self.__logger__.info(", TEMP, F=" + str(self.current_temperature_sensor_reading))
+            else:
+                self.current_temperature_sensor_reading = None
