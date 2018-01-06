@@ -30,14 +30,16 @@ class LcdDisplay(object):
             sm_bus {int} -- Which SMBUS to use
         """
 
-        if not local_debug.is_debug():
-            self.__smbus__ = smbus.SMBus(sm_bus_id)
-
-        self.__blen__ = bl
-        self.__lcd_addr__ = adr
-        self.enable = True
+        self.enable = False
 
         try:
+            if not local_debug.is_debug():
+                self.__smbus__ = smbus.SMBus(sm_bus_id)
+
+            self.__blen__ = bl
+            self.__lcd_addr__ = adr
+            self.enable = True
+
             self.send_command(0x33)  # Must initialize to 8-line mode at first
             time.sleep(0.005)
             self.send_command(0x32)  # Then initialize to 4-line mode
