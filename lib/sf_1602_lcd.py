@@ -30,14 +30,16 @@ class LcdDisplay(object):
             sm_bus {int} -- Which SMBUS to use
         """
 
-        if not local_debug.is_debug():
-            self.__smbus__ = smbus.SMBus(sm_bus_id)
-
-        self.__blen__ = bl
-        self.__lcd_addr__ = adr
-        self.enable = True
+        self.enable = False
 
         try:
+            if not local_debug.is_debug():
+                self.__smbus__ = smbus.SMBus(sm_bus_id)
+
+            self.__blen__ = bl
+            self.__lcd_addr__ = adr
+            self.enable = True
+
             self.send_command(0x33)  # Must initialize to 8-line mode at first
             time.sleep(0.005)
             self.send_command(0x32)  # Then initialize to 4-line mode
@@ -61,6 +63,9 @@ class LcdDisplay(object):
             data {string} -- The text to write.
         """
 
+        if not self.enable:
+            return
+
         temp = data
         if self.__blen__ == 1:
             temp |= 0x08
@@ -78,6 +83,9 @@ class LcdDisplay(object):
         Arguments:
             comm {hex} -- The i2c command
         """
+
+        if not self.enable:
+            return
 
         # Send bit7-4 firstly
         buf = comm & 0xF0
@@ -103,6 +111,9 @@ class LcdDisplay(object):
         Arguments:
             data {string} -- The data to write.
         """
+
+        if not self.enable:
+            return
 
         # Send bit7-4 firstly
         buf = data & 0xF0
@@ -144,6 +155,9 @@ class LcdDisplay(object):
         if text_to_write is None:
             return False
 
+        if not self.enable:
+            return False
+
         text_array = text_to_write.split('\n')
 
         array_count = len(text_array)
@@ -169,6 +183,9 @@ class LcdDisplay(object):
             y {int} -- The y position (in characters)
             text_to_write {string} -- The text to write.
         """
+
+        if not self.enable:
+            return
 
         if pos_x < 0:
             pos_x = 0

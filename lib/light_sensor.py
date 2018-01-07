@@ -74,16 +74,18 @@ class LightSensor(object):
             integration=INTEGRATIONTIME_100MS,
             gain=GAIN_LOW
     ):
-        if not local_debug.is_debug():
-            print "Initializing i2c bus"
-            self.bus = smbus.SMBus(i2c_bus)
-
-        self.sensor_address = sensor_address
-        self.integration_time = integration
-        self.gain = gain
-        self.enabled = True
+        self.enabled = False
 
         try:
+            if not local_debug.is_debug():
+                print "Initializing i2c bus"
+                self.bus = smbus.SMBus(i2c_bus)
+
+            self.sensor_address = sensor_address
+            self.integration_time = integration
+            self.gain = gain
+            self.enabled = True
+
             print "Setting timing"
             self.set_timing(self.integration_time)
             self.set_gain(self.gain)
