@@ -104,7 +104,7 @@ For a complete set of installation instructions, visit
 * Pigtail Connector into reciever
 * Red to GPIO 3V3
 * Black to GPIO GND
-* Brown to GPIO 12
+* Brown NOT USED
 
 ### Temp Sensor
 
@@ -148,9 +148,24 @@ any free SDA/SCL pins may be used.
 
 ## Additional Links And Setup Notes
 
-**The MQ-2 needs to be installed with an analog-to-digital converter** You
-need to enable I2C using `raspi-config` You need to modprobe two modules for the
-temperature sensor to work `w1-gpio` and `w1-therm`
+#### Enable analog-to-digital converter for the MQ-2 Gas Sensor
+
+To do this, you need to enable I2C and 1-Wire using `raspi-config`
+```bash
+sudo raspi-config
+```
+* Select Option 5 `Interfacing Options`
+* Select Option `P5 I2C` and enable
+* Select Option `P7 1-Wire` and enable
+* Save changes, exit `raspi-config` and reboot your Raspberry Pi
+
+#### Enable the temperature sensor
+
+Modprobe two modules for the temperature sensor:
+```bash
+sudo modprobe w1-gpio
+sudo modprobe w1-therm
+```
 
 ## Materials List
 
@@ -218,6 +233,7 @@ into the USB port.
 
 * [ ] [MiniHDMI to HDMI adapter](https://www.amazon.com/Adapter-VCE-Converter-Camcorder-Devices/dp/B01HYURR04/ref=sr_1_8?s=electronics&ie=UTF8&qid=1512070954&sr=1-8&keywords=mini+hdmi+adapter)
 * [ ] [USB Hub](https://www.amazon.com/gp/product/B00XMD7KPU/ref=oh_aui_detailpage_o02_s00?ie=UTF8&psc=1)
+* [ ] [Pi-EzConnect](https://www.amazon.com/Alchemy-Power-Inc-Pi-Zero-EzConnect-connector/dp/B071NT7QLC/ref=sr_1_3)
 
 ## Device Reference
 
