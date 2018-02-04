@@ -1,0 +1,21 @@
+.hb-section {
+    margin-top: 40px;
+    margin-bottom: 20px;
+    margin-left: 40px;
+    margin-right: 20px;
+}
+.hb-section-header {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+.hb-list-item-meta {
+    text-decoration: none;
+}
+.hb-list {
+    max-width: 500px;
+}
+.mdc-text-field--upgraded:not(.mdc-text-field--fullwidth):not(.mdc-text-field--box).hb-list-textbox{
+    margin-top: 0px;
+    margin-bottom: 0px;
+    width: 50px;
+}

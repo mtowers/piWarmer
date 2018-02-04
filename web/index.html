@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Material Components for the web</title>
+    <link rel="stylesheet"
+          href="material-components-web.css">
+    <link rel="stylesheet" href="material-icon-font.css">
+    <link rel="stylesheet" href="hangar-buddy.css">
+  </head>
+  <body class="mdc-typography">
+    <h1>Welcome to HangarBuddy!</h1>
+    <section class="hb-section">
+        <div class="hb-section-header"><i class="material-icons" tabindex="0">wifi</i> HangarBuddy WiFi</div>
+        <div class="mdc-text-field mdc-text-field--with-leading-icon" data-mdc-auto-init="MDCTextField">
+            <i class="material-icons mdc-text-field__icon" tabindex="0">lock</i>
+            <input required pattern=".{8,}" type="password" class="mdc-text-field__input" id="pw"
+                    aria-controls="pw-validation-msg">
+            <label for="pw" class="mdc-text-field__label">Choose password</label>
+            <div class="mdc-line-ripple"></div>
+        </div>
+        <p class="mdc-text-field-helper-text mdc-text-field-helper-text--persistent mdc-text-field-helper-text--validation-msg" id="pw-validation-msg">
+            Must be at least 8 characters long
+        </p>        
+    </section> 
+
+    <section class="hb-section">
+        <div class="hb-section-header"><i class="material-icons" tabindex="0">phone</i> HangarBuddy Phone Number</div>
+        <div class="mdc-text-field" data-mdc-auto-init="MDCTextField">
+            <input required pattern="^\d{3}-\d{3}-\d{4}$" type="text" class="mdc-text-field__input" id="hb-phone-number"
+                    aria-controls="phone-validation-msg">
+            <label for="hb-phone-number" class="mdc-text-field__label">phone number</label>
+            <div class="mdc-line-ripple"></div>
+        </div>
+        <p class="mdc-text-field-helper-text mdc-text-field-helper-text--persistent mdc-text-field-helper-text--validation-msg" id="hb-phone-number-validation-msg">
+            Format: XXX-XXX-XXXX
+        </p>        
+    </section> 
+
+    <section class="hb-section">
+        <div class="hb-section-header"><i class="material-icons" tabindex="0">sms</i> Authorized SMS Phone Numbers</div>  
+        <ul class="mdc-list mdc-list--two-line mdc-list--avatar-list hb-list">
+            <li class="mdc-list-item">
+                <span class="mdc-list-item__graphic" role="presentation">
+                <i class="material-icons" aria-hidden="true">phone</i>
+                </span>
+                <span class="mdc-list-item__text">
+                Matt Towers
+                <span class="mdc-list-item__secondary-text">206-555-1212</span>
+                </span>
+                <a href="#" class="mdc-list-item__meta material-icons hb-list-item-meta" aria-label="View more information" title="More info" onclick="event.preventDefault();">
+                remove_circle
+                </a>
+            </li>
+            <li class="mdc-list-item">
+                <span class="mdc-list-item__graphic" role="presentation">
+                <i class="material-icons" aria-hidden="true">phone</i>
+                </span>
+                <span class="mdc-list-item__text">
+                John Marzulli
+                <span class="mdc-list-item__secondary-text">206-555-1212</span>
+                </span>
+                <a href="#" class="mdc-list-item__meta material-icons hb-list-item-meta" aria-label="View more information" title="More info" onclick="event.preventDefault();">
+                remove_circle
+                </a>
+            </li>
+            <li class="mdc-list-item">
+                <span class="mdc-list-item__graphic" role="presentation">
+                <i class="material-icons" aria-hidden="true">phone</i>
+                </span>
+                <span class="mdc-list-item__text">
+                Kelly Johnson
+                <span class="mdc-list-item__secondary-text">206-555-1212</span>
+                </span>
+                <a href="#" class="mdc-list-item__meta material-icons hb-list-item-meta" aria-label="View more information" title="More info" onclick="event.preventDefault();">
+                remove_circle
+                </a>
+            </li>
+            <i class="material-icons" aria-hidden="true" title="add phone number">add_circle</i>
+        </ul>    
+    </section>
+
+    <section class="hb-section">
+        <div class="hb-section-header"><i class="material-icons" tabindex="0">settings</i> Features</div> 
+        <ul class="mdc-list mdc-list--non-interactive hb-list">
+            <li class="mdc-list-item">
+                <i class="mdc-list-item__graphic material-icons" aria-hidden="true">wb_cloudy</i>
+                Gas Sensor
+                <div class="mdc-switch mdc-list-item__meta">
+                    <input type="checkbox" checked id="basic-switch" class="mdc-switch__native-control" />
+                    <div class="mdc-switch__background">
+                        <div class="mdc-switch__knob"></div>
+                    </div>
+                </div> 
+                <label for="basic-switch" class="mdc-switch-label">&nbsp;off/on</label>
+            </li>
+            <li class="mdc-list-item">
+                <i class="mdc-list-item__graphic material-icons" aria-hidden="true">wb_incandescent</i>
+                Light Sensor
+                <div class="mdc-switch mdc-list-item__meta">
+                    <input type="checkbox" checked id="basic-switch" class="mdc-switch__native-control" />
+                    <div class="mdc-switch__background">
+                        <div class="mdc-switch__knob"></div>
+                    </div>
+                </div> 
+                <label for="basic-switch" class="mdc-switch-label">&nbsp;off/on</label>
+            </li>
+            <li class="mdc-list-item">
+                <i class="mdc-list-item__graphic material-icons" aria-hidden="true">ac_unit</i>
+                Temperature Sensor
+                <div class="mdc-switch mdc-list-item__meta">
+                    <input type="checkbox" checked id="basic-switch" class="mdc-switch__native-control" />
+                    <div class="mdc-switch__background">
+                        <div class="mdc-switch__knob"></div>
+                    </div>
+                </div> 
+                <label for="basic-switch" class="mdc-switch-label">&nbsp;off/on</label>
+            </li>     
+            <li class="mdc-list-item">
+                <i class="mdc-list-item__graphic material-icons" aria-hidden="true">timer</i>
+                Heater On Time (mins)
+                <div dir="rtl" class="mdc-text-field mdc-list-item__meta hb-list-textbox" data-mdc-auto-init="MDCTextField">
+                    <span>
+                    <input pattern="^(0?[1-9]{1,2}|1[0-1][0-9]|120)$" type="text" value="45" class="mdc-text-field__input" id="hb-heater-on-time"
+                        aria-controls="phone-validation-msg"/>
+                    </span>
+                </div>
+                <p class="mdc-text-field-helper-text mdc-text-field-helper-text--validation-msg" id="hb-heater-on-time-validation-msg">
+                    1-120
+                </p> 
+            </li>                    
+        </ul>        
+    </section>
+    <script src="material-components-web.js"></script>
+    <script>mdc.autoInit()</script>
+  </body>
+</html>
